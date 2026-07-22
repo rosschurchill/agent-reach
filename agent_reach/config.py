@@ -39,32 +39,59 @@ class Config:
         self.config_dir.mkdir(parents=True, exist_ok=True)
 
     def load(self):
-        """Load config from YAML file."""
-        if self.config_path.exists():
+        """Load config from YAML file.
+
+        A torn or hand-corrupted config must never brick the CLI: Config() is
+        constructed on every command, so an unguarded YAMLError here would take
+        down the whole tool. On a parse/read error we quarantine the bad file
+        and start from an empty config instead of raising.
+        """
+        if not self.config_path.exists():
+            self.data = {}
+            return
+        try:
             with open(self.config_path, "r", encoding="utf-8") as f:
                 self.data = yaml.safe_load(f) or {}
-        else:
+        except (yaml.YAMLError, OSError) as e:
+            import sys
+            corrupt = self.config_path.with_suffix(self.config_path.suffix + ".corrupt")
+            try:
+                os.replace(self.config_path, corrupt)
+                where = f"（已备份到 {corrupt}）"
+            except OSError:
+                where = ""
+            print(
+                f"[!] 配置文件无法解析，已忽略并从空配置开始{where}：{e}",
+                file=sys.stderr,
+            )
             self.data = {}
 
     def save(self):
-        """Save config to YAML file."""
+        """Save config to YAML file atomically.
+
+        Write to a temp file in the same directory (0o600 from creation, so
+        credentials are never briefly world-readable) then os.replace() onto
+        the target — an interrupted write leaves the previous config intact
+        instead of a half-truncated file that would fail to parse next load.
+        """
         self._ensure_dir()
-        # Create file with restricted permissions from the start to avoid
-        # a race window where credentials are briefly world-readable.
+        import stat
+        import tempfile
+
+        fd, tmp = tempfile.mkstemp(
+            dir=str(self.config_dir), prefix=".config.", suffix=".tmp"
+        )
         try:
-            import stat
-            fd = os.open(
-                str(self.config_path),
-                os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
-                stat.S_IRUSR | stat.S_IWUSR,  # 0o600
-            )
+            os.chmod(tmp, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 yaml.dump(self.data, f, default_flow_style=False, allow_unicode=True)
-        except OSError:
-            # Fallback for Windows or other edge cases where os.open flags
-            # are not fully supported.
-            with open(self.config_path, "w", encoding="utf-8") as f:
-                yaml.dump(self.data, f, default_flow_style=False, allow_unicode=True)
+            os.replace(tmp, str(self.config_path))
+        except BaseException:
+            try:
+                os.unlink(tmp)
+            except OSError:
+                pass
+            raise
 
     def get(self, key: str, default: Any = None) -> Any:
         """Get a config value. Also checks environment variables (uppercase)."""

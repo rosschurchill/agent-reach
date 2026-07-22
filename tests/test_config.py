@@ -50,6 +50,26 @@ class TestConfig:
         assert config2.get("key1") == "value1"
         assert config2.get("key2") == 42
 
+    def test_corrupt_yaml_does_not_brick_cli(self, tmp_path, capsys):
+        """FX-201: a torn/corrupt config must load to {} (never raise), and the
+        bad file is quarantined so the next save starts clean."""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("key: [unterminated\n:::not yaml", encoding="utf-8")
+
+        config = Config(config_path=config_file)  # must not raise
+
+        assert config.data == {}
+        assert config_file.with_suffix(".yaml.corrupt").exists()
+
+    def test_save_is_atomic_preserves_perms(self, tmp_config):
+        """FX-201: save writes 0o600 and leaves no stray temp files."""
+        tmp_config.set("secret_token", "abc123")
+        mode = oct(os.stat(tmp_config.config_path).st_mode & 0o777)
+        assert mode == "0o600"
+        # No leftover .config.*.tmp files in the dir.
+        leftovers = list(tmp_config.config_dir.glob(".config.*.tmp"))
+        assert leftovers == []
+
     def test_delete(self, tmp_config):
         tmp_config.set("to_delete", "value")
         assert tmp_config.get("to_delete") == "value"
