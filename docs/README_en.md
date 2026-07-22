@@ -38,7 +38,7 @@ To connect your Agent to these platforms, you'd have to find tools, install depe
 **Agent Reach turns this into one command:**
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install Agent Reach: ./docs/install.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 ```
 
 Copy that to your Agent. A few minutes later, it can read tweets, search Reddit, and watch Bilibili.
@@ -46,7 +46,7 @@ Copy that to your Agent. A few minutes later, it can read tweets, search Reddit,
 **Already installed? Update in one command:**
 
 ```
-Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+Update Agent Reach: ./docs/update.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 ```
 
 ### ✅ Before you start, you might want to know
@@ -97,19 +97,19 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 Copy this to your AI Agent (Claude Code, OpenClaw, Cursor, etc.):
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install Agent Reach: ./docs/install.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 ```
 
 The Agent auto-installs, detects your environment, and tells you what's ready.
 
 > 🔄 **Already installed?** Update in one command:
 > ```
-> Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+> Update Agent Reach: ./docs/update.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 > ```
 
 > 🛡️ **Worried about security?** Use safe mode — it won't auto-install system packages, it only tells you what you need:
 > ```
-> Install Agent Reach (safe mode): https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+> Install Agent Reach (safe mode): ./docs/install.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 > Use the --safe flag during install
 > ```
 
@@ -117,7 +117,7 @@ The Agent auto-installs, detects your environment, and tells you what's ready.
 <summary>Manual install</summary>
 
 ```bash
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0
 agent-reach install --env=auto
 ```
 </details>

@@ -69,8 +69,10 @@ list-arg `subprocess` everywhere — no `shell=True`, cookies written `0o600`, v
 - **Remediation is underway on `hardening`.** A `/graph-review` of `agent_reach/` (verdict
   CONDITIONAL) drove a `/fix-loop` that has landed the security/reliability half of the plan
   (see `docs/review/ACTION-PLAN-hardening.md` for AR-ticket status and `.claude-review/REMEDIATION.md`
-  for the CR-ticket plan). Shipped so far: remote fetch-and-follow removed from both SKILL files
-  and the CLI update/watch surface (AR-001/002), release-note echo dropped, `resp.json()` guarded,
+  for the CR-ticket plan). Shipped so far: remote fetch-and-follow removed from both SKILL files,
+  the CLI update/watch surface, **and all doc surfaces (README×4, docs/install.md, docs/update.md,
+  llms.txt) — the last of which round 1 missed because its acceptance grep was scoped to `agent_reach/`
+  only; a final `/graph-review` caught it and round 3 closed it (AR-001/002)**, release-note echo dropped, `resp.json()` guarded,
   child-process env allow-listed (AR-006), OpenCLI probe memoized + Edge/Brave/Chromium detection,
   twitter backend-override + probe hardening.
 - **Correction to the "Keep (don't regress)" list above:** the `transcribe.py` SSRF guard it credits

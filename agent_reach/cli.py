@@ -1820,8 +1820,7 @@ def _github_get_with_retry(url, timeout=10, retries=3, sleeper=time.sleep):
 _UPDATE_INSTRUCTIONS = (
     "更新方式（推荐，复制这句话给你的 AI Agent，会完整更新本体+上游工具+skill）：\n"
     "  帮我更新 Agent Reach：参考本仓库内自带的 docs/update.md\n"
-    "仅更新本体（不含上游工具和 skill）：\n"
-    "  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip"
+    "仅更新本体：在已审查的 fork 上做一次 SHA bump 后重装（不从浮动分支拉取，见 docs/update.md）。"
 )
 
 
@@ -1849,8 +1848,8 @@ def _cmd_check_update():
     from agent_reach import __version__
 
     print(f"当前版本: v{__version__}")
-    release_url = "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest"
-    commit_url = "https://api.github.com/repos/Panniantong/Agent-Reach/commits/main"
+    release_url = "https://api.github.com/repos/rosschurchill/agent-reach/releases/latest"
+    commit_url = "https://api.github.com/repos/rosschurchill/agent-reach/commits/main"
 
     # Fetch latest release with retry/backoff.
     resp, err, attempts = _github_get_with_retry(release_url, timeout=10, retries=3)
@@ -1935,7 +1934,7 @@ def _cmd_watch():
     update_available = False
     new_version = ""
     resp, err, _attempts = _github_get_with_retry(
-        "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest",
+        "https://api.github.com/repos/rosschurchill/agent-reach/releases/latest",
         timeout=10,
         retries=2,
     )

@@ -13,7 +13,7 @@ Status legend: **Done** = fix landed + acceptance command run · **In Progress**
 
 | ID | Sev | Title | Phase | Status |
 |----|-----|-------|-------|--------|
-| AR-001 | MED | Remove remote `main`-branch fetch-and-follow; vendor install/update docs | 1 | **Done** (CR-001/002; acceptance grep = 0) |
+| AR-001 | MED | Remove remote `main`-branch fetch-and-follow; vendor install/update docs | 1 | **Done** (skill in round 1; **docs + cli.py archive/main.zip completed round 3** — round-1's grep was `agent_reach/`-scoped and missed the docs; repo-wide grep now = 0) |
 | AR-002 | MED | Remove the self-update `check-update` nudge from the skill | 1 | **Done** (CR-001) |
 | AR-003 | MED | Narrow XHS/Xueqiu cookie capture to named tokens | 2 | **Done** (FX-202; live smoke recommended) |
 | AR-004 | LOW | Align guide docs to the SHA-pinned tooling (rdt-cli); pin mcporter/linkedin-mcp | 2 | **Done** (FX-203; `mcporter@0.12.0`, `linkedin-scraper-mcp==4.14.0`) |
@@ -46,7 +46,7 @@ injection / supply-chain hijack of the very cookies+keys this tool handles.
 **remote** copy: rewrite each reference to the local vendored path (e.g. "see `docs/install.md` in
 this repo"), or delete the "fetch this URL and follow it" instruction outright. The agent must never
 be told to pull setup/upgrade instructions from a network URL at runtime.
-**Acceptance:** `grep -rn "raw.githubusercontent.com/Panniantong/agent-reach/main" agent_reach/` →
+**Acceptance (repo-wide, not just `agent_reach/`):** `grep -rn "raw.githubusercontent.com/Panniantong/agent-reach/main" .` (excluding this review-history dir) →
 **0 hits**; docs reference local paths only. Manual read of SKILL.md confirms no "fetch & follow
 remote" step remains.
 

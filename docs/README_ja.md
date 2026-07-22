@@ -34,7 +34,7 @@ AIエージェントはすでにインターネットにアクセスできます
 **Agent Reach はこれを1つのコマンドにまとめます：**
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install Agent Reach: ./docs/install.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 ```
 
 これをエージェントにコピーするだけ。数分後には、ツイートの閲覧、Redditの検索、Bilibiliの視聴が可能になります。
@@ -42,7 +42,7 @@ Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/m
 **すでにインストール済み？1コマンドでアップデート：**
 
 ```
-Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+Update Agent Reach: ./docs/update.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 ```
 
 ### ✅ 始める前に知っておきたいこと
@@ -87,21 +87,21 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 以下をAIエージェント（Claude Code、OpenClaw、Cursor等）にコピーしてください：
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install Agent Reach: ./docs/install.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 ```
 
 エージェントが自動でインストールし、環境を検出し、何が使えるかを教えてくれます。
 
 > 🔄 **すでにインストール済み？** 1コマンドでアップデート：
 > ```
-> Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+> Update Agent Reach: ./docs/update.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 > ```
 
 <details>
 <summary>手動インストール</summary>
 
 ```bash
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0
 agent-reach install --env=auto
 ```
 </details>

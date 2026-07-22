@@ -41,7 +41,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 **Agent Reach 把这件事变成一句话：**
 
 ```
-帮我安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+帮我安装 Agent Reach：./docs/install.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 ```
 
 复制给你的 Agent，几分钟后它就能读推特、搜 Reddit、看 YouTube、刷小红书了。
@@ -49,7 +49,7 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 **已经装过了？更新也是一句话：**
 
 ```
-帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+帮我更新 Agent Reach：./docs/update.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 ```
 
 > ⭐ **Star 这个项目**，我们会持续追踪各平台的变化、接入新的渠道。你不用自己盯——平台封了我们修，有新渠道我们加。
@@ -108,19 +108,19 @@ AI Agent 已经能帮你写代码、改文档、管项目——但你让它去�
 复制这句话给你的 AI Agent（Claude Code、OpenClaw、Cursor 等）：
 
 ```
-帮我安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+帮我安装 Agent Reach：./docs/install.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 ```
 
 就这一步。Agent 会自己完成剩下的所有事情。
 
 > 🔄 **已安装过？** 更新也是一句话：
 > ```
-> 帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+> 帮我更新 Agent Reach：./docs/update.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 > ```
 
 > 🛡️ **担心安全？** 可以用安全模式——不会自动装系统包，只告诉你需要什么：
 > ```
-> 帮我安装 Agent Reach（安全模式）：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+> 帮我安装 Agent Reach（安全模式）：./docs/install.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 > 安装时使用 --safe 参数
 > ```
 

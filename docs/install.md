@@ -5,12 +5,12 @@
 Copy this to your AI Agent:
 
 ```
-帮我安装 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+帮我安装 Agent Reach：./docs/install.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 ```
 
 > 🛡️ **Security-conscious?** Use safe mode — it won't auto-install system packages:
 > ```
-> 帮我安装 Agent Reach（安全模式）：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+> 帮我安装 Agent Reach（安全模式）：./docs/install.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 > 安装时使用 --safe 参数
 > ```
 
@@ -50,14 +50,14 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 
 ```bash
 # 推荐：pipx（最省心）
-pipx install https://github.com/Panniantong/agent-reach/archive/main.zip
+pipx install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0
 agent-reach install --env=auto
 
 # 如果你的 Python 来自 Homebrew / 遇到 PEP 668（externally-managed-environment）
 # 用虚拟环境安装：
 python3 -m venv ~/.agent-reach-venv
 source ~/.agent-reach-venv/bin/activate
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0
 agent-reach install --env=auto
 ```
 
@@ -70,7 +70,7 @@ agent-reach install --env=auto
 > ```powershell
 > py -3 -m venv $env:USERPROFILE\.agent-reach-venv
 > $env:USERPROFILE\.agent-reach-venv\Scripts\Activate.ps1
-> python -m pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+> python -m pip install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0
 > agent-reach install --env=auto
 > ```
 
@@ -293,7 +293,7 @@ If the user agrees, create a **cron job** (daily, `sessionTarget: "isolated"`, `
 运行 agent-reach watch 命令。
 如果输出包含"全部正常"，不需要通知用户，静默结束。
 如果输出包含问题（❌ ⚠️）或新版本（🆕），把完整报告发给用户，并建议修复方案。
-如果有新版本可用，问用户是否要升级（把这句话发给用户的 Agent 即可完整更新：帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md）。
+如果有新版本可用，问用户是否要升级（把这句话发给用户的 Agent 即可完整更新：帮我更新 Agent Reach：./docs/update.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch））。
 ```
 
 If the user wants a different agent to handle it, let them choose.

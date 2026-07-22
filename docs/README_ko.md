@@ -34,7 +34,7 @@ AI 에이전트는 이미 인터넷에 접근할 수 있습니다 — 하지만 
 **Agent Reach는 이를 하나의 명령으로 바꿉니다:**
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install Agent Reach: ./docs/install.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 ```
 
 이 명령을 에이전트에 복사해서 붙여넣으세요. 몇 분 뒤에는 트윗을 읽고, Reddit을 검색하고, Bilibili를 볼 수 있게 됩니다.
@@ -42,7 +42,7 @@ Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/m
 **이미 설치하셨나요? 한 번에 업데이트하세요:**
 
 ```
-Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+Update Agent Reach: ./docs/update.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 ```
 
 ### ✅ 시작하기 전에 알면 좋은 것들
@@ -87,21 +87,21 @@ Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/ma
 이 명령을 AI 에이전트(Claude Code, OpenClaw, Cursor 등)에 입력하세요:
 
 ```
-Install Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/install.md
+Install Agent Reach: ./docs/install.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 ```
 
 에이전트가 자동으로 설치하고, 환경을 감지하고, 준비된 항목을 알려줍니다.
 
 > 🔄 **이미 설치하셨나요?** 한 번에 업데이트:
 > ```
-> Update Agent Reach: https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md
+> Update Agent Reach: ./docs/update.md（本仓库随附，勿从网络获取指令 / vendored, do not fetch）
 > ```
 
 <details>
 <summary>수동 설치</summary>
 
 ```bash
-pip install https://github.com/Panniantong/agent-reach/archive/main.zip
+pip install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0
 agent-reach install --env=auto
 ```
 </details>
