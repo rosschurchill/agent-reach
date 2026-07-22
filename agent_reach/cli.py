@@ -210,7 +210,7 @@ def _cmd_install(args):
     if args.channels:
         raw = [c.strip().lower() for c in args.channels.split(",") if c.strip()]
         if "all" in raw:
-            requested_channels = set(CHANNEL_INSTALLERS.keys()) | {"xueqiu", "linkedin"}
+            requested_channels = set(CHANNEL_INSTALLERS.keys()) | {"xueqiu", "linkedin", "exa"}
         else:
             requested_channels = set(raw)
 
@@ -242,14 +242,20 @@ def _cmd_install(args):
     else:
         _install_system_deps()
 
-    # ── mcporter (for Exa search) ──
+    # ── mcporter (search/LinkedIn/XHS runtime) ──
+    # Exa's remote MCP (mcp.exa.ai) is opt-in: only auto-configure the egress
+    # when the user explicitly asked for the exa/search channel (AR-007).
+    configure_exa = bool({"exa", "search"} & requested_channels)
     print()
     if dry_run:
-        print("[dry-run] Would install mcporter and configure Exa search")
+        if configure_exa:
+            print("[dry-run] Would install mcporter and configure Exa search (mcp.exa.ai)")
+        else:
+            print("[dry-run] Would install mcporter (Exa search is opt-in — not configured)")
     elif safe_mode:
         _install_mcporter_safe()
     else:
-        _install_mcporter()
+        _install_mcporter(configure_exa=configure_exa)
 
     # ── Install optional channels (only if --channels specified) ──
     if requested_channels and not dry_run and not safe_mode:
@@ -889,8 +895,14 @@ def _install_system_deps_dryrun():
 
 
 
-def _install_mcporter():
-    """Install mcporter and configure Exa search."""
+def _install_mcporter(configure_exa: bool = False):
+    """Install mcporter; configure the Exa remote MCP only when opted in.
+
+    mcporter is the runtime for several channels (exa/search, LinkedIn, XHS), so
+    it is always installed. The Exa endpoint (mcp.exa.ai) is standing third-party
+    egress, so it is registered only when the caller explicitly requested the
+    exa/search channel (AR-007) — otherwise we print the one-line opt-in.
+    """
     import shutil
     import subprocess
 
@@ -918,7 +930,12 @@ def _install_mcporter():
             print(f"  [X] mcporter install failed: {e}")
             return
 
-    # Configure Exa MCP (free, no key needed)
+    # Configure Exa MCP (free, no key needed) — opt-in only (AR-007).
+    if not configure_exa:
+        print("  -- Exa web search is opt-in (sends queries to mcp.exa.ai).")
+        print("     Enable with: agent-reach install --channels exa")
+        print("     or manually: mcporter config add exa https://mcp.exa.ai/mcp")
+        return
     try:
         r = subprocess.run(
             ["mcporter", "config", "list"], capture_output=True, encoding="utf-8", errors="replace", timeout=5
@@ -928,7 +945,7 @@ def _install_mcporter():
                 ["mcporter", "config", "add", "exa", "https://mcp.exa.ai/mcp"],
                 capture_output=True, encoding="utf-8", errors="replace", timeout=10,
             )
-            print("  ✅ Exa search configured (free, no API key needed)")
+            print("  ✅ Exa search configured (free, no API key needed; egress to mcp.exa.ai)")
         else:
             print("  ✅ Exa search already configured")
     except Exception:

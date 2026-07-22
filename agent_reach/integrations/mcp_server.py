@@ -37,7 +37,13 @@ def create_server():
     async def list_tools():
         return [
             Tool(name="get_status",
-                 description="Get Agent Reach status: which channels are installed and active.",
+                 description=(
+                     "Get Agent Reach status: which channels are installed and active. "
+                     "NOTE: this runs live diagnostics — it spawns local probe "
+                     "subprocesses and makes outbound network calls to third-party "
+                     "services (e.g. x.com, xueqiu.com) to determine each channel's "
+                     "current availability. It is not a passive/cached read."
+                 ),
                  inputSchema={"type": "object", "properties": {}}),
         ]
 
