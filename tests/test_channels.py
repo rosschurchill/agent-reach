@@ -12,6 +12,35 @@ from agent_reach.channels.xiaohongshu import XiaoHongShuChannel
 from agent_reach.channels.xueqiu import XueqiuChannel
 
 
+class _DictConfig:
+    def __init__(self, data):
+        self._data = data
+
+    def get(self, key, default=None):
+        return self._data.get(key, default)
+
+
+def test_stale_backend_override_surfaces_notice_all_channels():
+    """CR-013: a backend override matching no candidate is reported (not silently
+    ignored) for reddit/xiaohongshu/bilibili, via the shared BaseChannel helper."""
+    from unittest.mock import patch
+    from agent_reach.channels.reddit import RedditChannel
+    from agent_reach.channels.bilibili import BilibiliChannel
+
+    for cls, key in (
+        (RedditChannel, "reddit_backend"),
+        (XiaoHongShuChannel, "xiaohongshu_backend"),
+        (BilibiliChannel, "bilibili_backend"),
+    ):
+        ch = cls()
+        # No backend installed → falls to the "off" path; override is a typo.
+        with patch("agent_reach.probe.probe_command") as pc:
+            pc.return_value = type("R", (), {"status": "missing", "ok": False, "output": "", "hint": ""})()
+            with patch("shutil.which", return_value=None):
+                status, message = ch.check(_DictConfig({key: "nonesuch"}))
+        assert "未匹配任何候选" in message, f"{cls.__name__} dropped the stale-override notice"
+
+
 class TestChannelRegistry:
     def test_get_channel_by_name(self):
         ch = get_channel("github")

@@ -68,6 +68,15 @@ class Channel(ABC):
                 self.override_ignored = override
         return candidates
 
+    def _with_override_notice(self, status: str, message: str) -> Tuple[str, str]:
+        """Append a notice when a backend override matched no candidate, so a stale
+        override (e.g. `reddit_backend=typo`) isn't silently ignored (CR-013)."""
+        if self.override_ignored:
+            message = (
+                f"{message}\n（后端覆盖 {self.override_ignored} 未匹配任何候选，已忽略）"
+            )
+        return status, message
+
     def check(self, config=None) -> Tuple[str, str]:
         """
         Check if this channel's upstream tool is available.

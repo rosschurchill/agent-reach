@@ -62,12 +62,12 @@ class RedditChannel(Channel):
             for backend, status, message in findings:
                 if status == wanted:
                     self.active_backend = backend
-                    return status, message
+                    return self._with_override_notice(status, message)
 
         if findings:
-            return "error", "\n".join(m for _, _, m in findings)
+            return self._with_override_notice("error", "\n".join(m for _, _, m in findings))
 
-        return "off", (
+        return self._with_override_notice("off", (
             "未安装任何 Reddit 后端。注意：Reddit 没有零配置路径"
             "（匿名 .json 已被封，官方 API 需人工审批），必须用登录态。推荐：\n"
             "  桌面：agent-reach install --channels opencli\n"
@@ -75,7 +75,7 @@ class RedditChannel(Channel):
             f"  服务器/存量：pipx install '{_RDT_GIT_SOURCE}'\n"
             "       然后 `rdt login` 或手动写入 Cookie（见 doctor 提示）\n"
             "中国大陆访问 Reddit 需要代理"
-        )
+        ))
 
     def _check_opencli(self):
         """OpenCLI candidate. None = not installed."""

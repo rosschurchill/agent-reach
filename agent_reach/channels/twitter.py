@@ -28,14 +28,8 @@ class TwitterChannel(Channel):
         findings = []
         ordered = self.ordered_backends(config)
 
-        def _with_override_notice(status, message):
-            # CR-009: tell the user their backend override matched nothing.
-            if self.override_ignored:
-                message = (
-                    f"{message}\n（后端覆盖 {self.override_ignored} "
-                    "未匹配任何候选，已忽略）"
-                )
-            return status, message
+        # Shared with all channels via BaseChannel (CR-013).
+        _with_override_notice = self._with_override_notice
 
         for backend in ordered:
             if backend == "twitter-cli":

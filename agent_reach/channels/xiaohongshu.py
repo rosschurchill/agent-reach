@@ -182,17 +182,17 @@ class XiaoHongShuChannel(Channel):
             for backend, status, message in findings:
                 if status == wanted:
                     self.active_backend = backend
-                    return status, message
+                    return self._with_override_notice(status, message)
 
         if findings:  # only broken candidates left
-            return "error", "\n".join(m for _, _, m in findings)
+            return self._with_override_notice("error", "\n".join(m for _, _, m in findings))
 
-        return "off", (
+        return self._with_override_notice("off", (
             "未安装任何小红书后端。推荐：\n"
             "  桌面：agent-reach install --channels opencli\n"
             "       （复用 Chrome 登录态，刷过小红书即零配置可用）\n"
             f"  服务器：xiaohongshu-mcp（自带无头浏览器+扫码登录）：{_MCP_INSTALL_URL}"
-        )
+        ))
 
     def _check_opencli(self):
         """OpenCLI candidate. None = not installed."""

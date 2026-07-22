@@ -68,16 +68,16 @@ class BilibiliChannel(Channel):
                     self.active_backend = backend
                     if broken_notes:
                         message += "\n[备选后端异常] " + "；".join(broken_notes)
-                    return status, message
+                    return self._with_override_notice(status, message)
 
         if findings:
-            return "error", "\n".join(m for _, _, m in findings)
+            return self._with_override_notice("error", "\n".join(m for _, _, m in findings))
 
-        return "off", (
+        return self._with_override_notice("off", (
             "没有可用的 B站后端（搜索 API 也不可达，可能是网络问题）。推荐：\n"
             "  pipx install bilibili-cli（搜索/热门/视频详情，无需登录）\n"
             "  或桌面装 OpenCLI（额外解锁字幕）：agent-reach install --channels opencli"
-        )
+        ))
 
     def _check_bili_cli(self):
         """bili-cli candidate. None = not installed."""
