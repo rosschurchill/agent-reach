@@ -59,9 +59,26 @@ class TestConfig:
         config = Config(config_path=config_file)  # must not raise
 
         assert config.data == {}
-        # Original quarantined; a uniquely-suffixed .corrupt.* backup exists.
+        # Original quarantined; a uniquely-suffixed .corrupt.<ts>.<pid> backup exists.
         assert not config_file.exists()
         assert list(tmp_path.glob("config.yaml.corrupt.*"))
+
+    @pytest.mark.parametrize("content", ["just some text", "- a\n- b\n", "42"])
+    def test_non_dict_yaml_is_quarantined(self, tmp_path, content):
+        """CR-001: valid YAML that isn't a mapping (str/list/scalar) must be
+        quarantined too, or set()/to_dict() raise on every later call."""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text(content, encoding="utf-8")
+
+        config = Config(config_path=config_file)  # must not raise
+
+        assert config.data == {}
+        assert not config_file.exists()
+        assert list(tmp_path.glob("config.yaml.corrupt.*"))
+        # And the CLI is usable afterward:
+        config.set("k", "v")
+        assert config.get("k") == "v"
+        assert isinstance(config.to_dict(), dict)
 
     def test_transient_oserror_leaves_config_intact(self, tmp_path, monkeypatch):
         """CR-005: a transient OSError on read must NOT quarantine a valid config

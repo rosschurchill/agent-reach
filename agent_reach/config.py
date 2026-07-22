@@ -6,6 +6,7 @@ Auto-creates directory on first use.
 """
 
 import os
+import time
 from pathlib import Path
 from typing import Any, Optional
 
@@ -59,24 +60,10 @@ class Config:
             return
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
-                self.data = yaml.safe_load(f) or {}
+                loaded = yaml.safe_load(f)
         except yaml.YAMLError as e:
-            # Genuinely unparseable → quarantine with a unique suffix, start empty.
-            stamp = str(os.getpid())
-            corrupt = self.config_path.with_suffix(
-                self.config_path.suffix + f".corrupt.{stamp}"
-            )
-            try:
-                os.replace(self.config_path, corrupt)
-                where = f"（已备份到 {corrupt}）"
-            except OSError:
-                where = ""
-            print(
-                f"[!] 配置文件无法解析，已忽略并从空配置开始{where} / "
-                f"config unparseable, quarantined and starting empty: {e}",
-                file=sys.stderr,
-            )
-            self.data = {}
+            self._quarantine_corrupt(f"unparseable: {e}")
+            return
         except OSError as e:
             # Transient I/O — do NOT touch the file; just proceed with empty data.
             print(
@@ -85,6 +72,38 @@ class Config:
                 file=sys.stderr,
             )
             self.data = {}
+            return
+        # Valid YAML but not a mapping (a bare string / list) would make set() and
+        # to_dict() raise on every later call — treat it like a corrupt file (CR-001).
+        if loaded is None:
+            self.data = {}
+        elif isinstance(loaded, dict):
+            self.data = loaded
+        else:
+            self._quarantine_corrupt(f"not a mapping (got {type(loaded).__name__})")
+
+    def _quarantine_corrupt(self, why: str):
+        """Move a genuinely-bad config aside (uniquely named, never clobbering an
+        existing backup) and start from empty data."""
+        import sys
+
+        # time + pid so a PID reused after reboot/container restart can't overwrite
+        # a prior quarantined credentials file (CR-002).
+        stamp = f"{int(time.time())}.{os.getpid()}"
+        corrupt = self.config_path.with_suffix(
+            self.config_path.suffix + f".corrupt.{stamp}"
+        )
+        try:
+            os.replace(self.config_path, corrupt)
+            where = f"（已备份到 {corrupt}）"
+        except OSError:
+            where = ""
+        print(
+            f"[!] 配置文件无效，已忽略并从空配置开始{where} / "
+            f"config invalid ({why}), quarantined and starting empty",
+            file=sys.stderr,
+        )
+        self.data = {}
 
     def save(self):
         """Save config to YAML file atomically.
