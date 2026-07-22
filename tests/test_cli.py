@@ -269,6 +269,25 @@ class TestCheckUpdateRetry:
         assert "网络超时" in captured.out
         assert "已重试 3 次" in captured.out
 
+    def test_check_update_no_releases_is_up_to_date(self, capsys):
+        """REG-3: a fork with no published releases returns 404 → report the pinned
+        build as up-to-date, not the old commit-main spam."""
+        class R:
+            status_code = 404
+            headers = {}
+
+            @staticmethod
+            def json():
+                return {"message": "Not Found"}
+
+        with patch("agent_reach.cli._github_get_with_retry", return_value=(R(), None, 1)):
+            result = cli._cmd_check_update()
+
+        out = capsys.readouterr().out
+        assert result == "up_to_date"
+        assert "已是最新" in out
+        assert "最新提交" not in out  # no commit-main fallback spam
+
     def test_check_update_survives_non_json_200(self, capsys):
         """CR-004: a captive portal returning HTTP 200 + HTML must not crash
         check-update — resp.json() raising ValueError degrades gracefully."""

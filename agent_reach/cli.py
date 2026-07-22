@@ -1956,7 +1956,6 @@ def _cmd_check_update():
 
     print(f"当前版本: v{__version__}")
     release_url = "https://api.github.com/repos/rosschurchill/agent-reach/releases/latest"
-    commit_url = "https://api.github.com/repos/rosschurchill/agent-reach/commits/main"
 
     # Fetch latest release with retry/backoff.
     resp, err, attempts = _github_get_with_retry(release_url, timeout=10, retries=3)
@@ -1985,24 +1984,16 @@ def _cmd_check_update():
         print("[!] 无法检查更新（GitHub API 速率限制，请稍后重试）")
         return "error"
 
-    # No releases yet, fall back to latest main commit.
-    resp2, err2, attempts2 = _github_get_with_retry(commit_url, timeout=10, retries=2)
-    if err2:
-        print(f"[!] 无法检查更新（{_update_error_text(err2)}，已重试 {attempts + attempts2} 次）")
-        return "error"
-    if resp2.status_code == 200:
-        try:
-            commit = resp2.json()
-        except ValueError:
-            print("[!] 无法检查更新（响应格式异常）")
-            return "error"
-        sha = commit.get("sha", "")[:7]
-        msg = commit.get("commit", {}).get("message", "").split("\n")[0]
-        date = commit.get("commit", {}).get("committer", {}).get("date", "")[:10]
-        print(f"最新提交: {sha} ({date}) {msg}")
-        print()
-        print(_UPDATE_INSTRUCTIONS)
-        return "unknown"
+    # 404 = the pinned fork has no published GitHub Releases. Under the reviewed-
+    # fork trust model that means "you're on the pinned build" — updates are a
+    # deliberate SHA bump (docs/update.md), NOT an auto-follow of a floating main.
+    # (REG-3: the old commit-main fallback spammed "最新提交 …" on every run.)
+    if resp.status_code == 404:
+        print(f"✅ 已是最新（已固定审查版本 v{__version__}；更新见 docs/update.md 的 SHA bump）")
+        return "up_to_date"
+
+    print(f"[!] 无法检查更新（GitHub 返回 {resp.status_code}）")
+    return "error"
 
     commit_err = _classify_github_response_error(resp2)
     if commit_err == "rate_limit":
