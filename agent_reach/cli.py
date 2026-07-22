@@ -1649,7 +1649,7 @@ def _github_get_with_retry(url, timeout=10, retries=3, sleeper=time.sleep):
 #: agent through all three (docs/update.md); bare pip only updates the package.
 _UPDATE_INSTRUCTIONS = (
     "更新方式（推荐，复制这句话给你的 AI Agent，会完整更新本体+上游工具+skill）：\n"
-    "  帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md\n"
+    "  帮我更新 Agent Reach：参考本仓库内自带的 docs/update.md\n"
     "仅更新本体（不含上游工具和 skill）：\n"
     "  pip install --upgrade https://github.com/Panniantong/agent-reach/archive/main.zip"
 )
@@ -1689,18 +1689,15 @@ def _cmd_check_update():
         return "error"
 
     if resp.status_code == 200:
-        data = resp.json()
+        try:
+            data = resp.json()
+        except ValueError:
+            print("[!] 无法检查更新（响应格式异常）")
+            return "error"
         latest = data.get("tag_name", "").lstrip("v")
-        body = data.get("body", "")
 
         if latest and _is_newer_version(latest, __version__):
             print(f"最新版本: v{latest} ← 有更新！")
-            if body:
-                print()
-                print("更新内容：")
-                # Show first 20 lines of release notes
-                for line in body.strip().split("\n")[:20]:
-                    print(f"  {line}")
             print()
             print(_UPDATE_INSTRUCTIONS)
             return "update_available"
@@ -1718,7 +1715,11 @@ def _cmd_check_update():
         print(f"[!] 无法检查更新（{_update_error_text(err2)}，已重试 {attempts + attempts2} 次）")
         return "error"
     if resp2.status_code == 200:
-        commit = resp2.json()
+        try:
+            commit = resp2.json()
+        except ValueError:
+            print("[!] 无法检查更新（响应格式异常）")
+            return "error"
         sha = commit.get("sha", "")[:7]
         msg = commit.get("commit", {}).get("message", "").split("\n")[0]
         date = commit.get("commit", {}).get("committer", {}).get("date", "")[:10]
@@ -1763,19 +1764,21 @@ def _cmd_watch():
     # Check for updates
     update_available = False
     new_version = ""
-    release_body = ""
     resp, err, _attempts = _github_get_with_retry(
         "https://api.github.com/repos/Panniantong/Agent-Reach/releases/latest",
         timeout=10,
         retries=2,
     )
     if not err and resp and resp.status_code == 200:
-        data = resp.json()
-        latest = data.get("tag_name", "").lstrip("v")
-        if latest and _is_newer_version(latest, __version__):
-            update_available = True
-            new_version = latest
-            release_body = data.get("body", "")
+        try:
+            data = resp.json()
+        except ValueError:
+            data = None
+        if data is not None:
+            latest = data.get("tag_name", "").lstrip("v")
+            if latest and _is_newer_version(latest, __version__):
+                update_available = True
+                new_version = latest
 
     # Output
     if not issues and not update_available:
@@ -1794,11 +1797,8 @@ def _cmd_watch():
     if update_available:
         print()
         print(f"新版本可用: v{new_version}")
-        if release_body:
-            for line in release_body.strip().split("\n")[:10]:
-                print(f"    {line}")
         print("  更新（一句话发给 Agent 即可完整更新）：")
-        print("    帮我更新 Agent Reach：https://raw.githubusercontent.com/Panniantong/agent-reach/main/docs/update.md")
+        print("    帮我更新 Agent Reach：参考本仓库内自带的 docs/update.md")
 
 
 if __name__ == "__main__":

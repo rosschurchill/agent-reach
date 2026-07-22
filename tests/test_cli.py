@@ -184,6 +184,24 @@ class TestCheckUpdateRetry:
         assert "网络超时" in captured.out
         assert "已重试 3 次" in captured.out
 
+    def test_check_update_survives_non_json_200(self, capsys):
+        """CR-004: a captive portal returning HTTP 200 + HTML must not crash
+        check-update — resp.json() raising ValueError degrades gracefully."""
+        class R:
+            status_code = 200
+            headers = {}
+
+            @staticmethod
+            def json():
+                raise ValueError("Expecting value: line 1 column 1 (char 0)")
+
+        with patch("agent_reach.cli._github_get_with_retry", return_value=(R(), None, 1)):
+            result = cli._cmd_check_update()
+
+        captured = capsys.readouterr()
+        assert result == "error"
+        assert "响应格式异常" in captured.out
+
 
 class TestVersionCompare:
     def test_newer_remote_triggers_update(self):
