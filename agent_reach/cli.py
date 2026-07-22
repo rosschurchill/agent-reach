@@ -566,8 +566,23 @@ def _run_vendored_nodesource_setup() -> bool:
         print(f"      expected {_NODESOURCE_SETUP_SHA256[:16]}…, got {digest[:16]}…")
         return False
     try:
-        r = subprocess.run(["bash", script], capture_output=True, timeout=120)
-        return r.returncode == 0
+        # 300s: two apt updates + several package installs on a slow mirror can
+        # exceed 120s (CR-011). Surface the tail of the output on failure so the
+        # install path is diagnosable instead of a bare "Node.js not installed".
+        r = subprocess.run(
+            ["bash", script], capture_output=True, text=True,
+            errors="replace", timeout=300,
+        )
+        if r.returncode != 0:
+            print(f"  [!]  NodeSource apt-repo setup failed (exit {r.returncode}):")
+            tail = (r.stderr or r.stdout or "").strip().splitlines()[-10:]
+            for line in tail:
+                print(f"      {line}")
+            return False
+        return True
+    except subprocess.TimeoutExpired:
+        print("  [!]  NodeSource apt-repo setup timed out (>300s) — check network/mirror.")
+        return False
     except (subprocess.SubprocessError, OSError) as e:
         print(f"  [!]  Node.js apt-repo setup failed: {e}")
         return False
@@ -620,8 +635,24 @@ def _scripts_dir() -> str:
     return os.path.join(os.path.dirname(__file__), "scripts")
 
 
+#: In-code trust anchors for scripts we EXECUTE. The co-located CHECKSUMS.sha256
+#: alone is only drift-detection — an attacker who can rewrite a script can rewrite
+#: the manifest in the same operation — so executed scripts are ALSO pinned here in
+#: reviewed code (CR-013). Verification must satisfy both the manifest and this pin.
+_SCRIPT_PINS = {
+    "nodesource_setup_22.x.sh": _NODESOURCE_SETUP_SHA256,
+    "transcribe_xiaoyuzhou.sh": (
+        "ea7150607391bf28bcc679723d113a12e3324be6a4f5ba23940c618233f96735"
+    ),
+}
+
+
 def _load_script_checksums() -> dict:
-    """Parse scripts/CHECKSUMS.sha256 into {filename: sha256}. Empty if missing."""
+    """Parse scripts/CHECKSUMS.sha256 into {filename: sha256}. Empty if missing.
+
+    Accepts both sha256sum output formats: 'digest  name' (text mode, two spaces)
+    and 'digest *name' (binary mode), and any run of whitespace (CR-012).
+    """
     manifest = os.path.join(_scripts_dir(), "CHECKSUMS.sha256")
     out = {}
     try:
@@ -630,19 +661,22 @@ def _load_script_checksums() -> dict:
                 line = line.strip()
                 if not line or line.startswith("#"):
                     continue
-                digest, _, name = line.partition("  ")
-                if digest and name:
-                    out[name.strip()] = digest.strip()
+                parts = line.split(None, 1)
+                if len(parts) != 2:
+                    continue
+                digest, name = parts
+                out[name.lstrip("*").strip()] = digest.strip()
     except OSError:
         pass
     return out
 
 
 def _verify_vendored_script(name: str) -> bool:
-    """True iff scripts/<name> exists and its sha256 matches the manifest pin.
+    """True iff scripts/<name> exists and its sha256 matches BOTH the manifest pin
+    and (for executed scripts) the in-code _SCRIPT_PINS anchor.
 
     Tamper/-change tripwire for every executable we ship — refuse to use a script
-    whose bytes don't match the reviewed CHECKSUMS.sha256 entry.
+    whose bytes don't match the reviewed checksum.
     """
     import hashlib
 
@@ -659,6 +693,10 @@ def _verify_vendored_script(name: str) -> bool:
     if digest != expected:
         print(f"  [X] {name}: sha256 mismatch vs manifest — refusing to use it.")
         print(f"      expected {expected[:16]}…, got {digest[:16]}…")
+        return False
+    pinned = _SCRIPT_PINS.get(name)
+    if pinned is not None and digest != pinned:
+        print(f"  [X] {name}: sha256 mismatch vs in-code pin — refusing to use it.")
         return False
     return True
 
@@ -732,10 +770,17 @@ def _install_system_deps():
     else:
         print("  Configuring Node.js apt repo (vendored NodeSource setup, sha256-pinned)...")
         if _run_vendored_nodesource_setup():
-            subprocess.run(
-                ["apt-get", "install", "-y", "-qq", "nodejs"],
-                capture_output=True, timeout=120,
-            )
+            try:
+                ap = subprocess.run(
+                    ["apt-get", "install", "-y", "-qq", "nodejs"],
+                    capture_output=True, text=True, errors="replace", timeout=300,
+                )
+                if ap.returncode != 0:
+                    print(f"  [!]  apt-get install nodejs failed (exit {ap.returncode}):")
+                    for line in (ap.stderr or "").strip().splitlines()[-10:]:
+                        print(f"      {line}")
+            except subprocess.SubprocessError as e:
+                print(f"  [!]  apt-get install nodejs failed: {e}")
         if shutil.which("node"):
             print("  ✅ Node.js installed")
         else:
