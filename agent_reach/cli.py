@@ -852,25 +852,41 @@ def _install_xiaoyuzhou_deps():
 
     tools_dir = os.path.expanduser("~/.agent-reach/tools/xiaoyuzhou")
     script_dst = os.path.join(tools_dir, "transcribe.sh")
+    script_src = os.path.join(_scripts_dir(), "transcribe_xiaoyuzhou.sh")
 
-    if os.path.isfile(script_dst):
+    import hashlib
+
+    def _sha(path):
+        try:
+            with open(path, "rb") as f:
+                return hashlib.sha256(f.read()).hexdigest()
+        except OSError:
+            return None
+
+    expected = _load_script_checksums().get("transcribe_xiaoyuzhou.sh")
+
+    # CR-011: an ALREADY-installed copy is trusted only if its hash still matches
+    # the pin — a pre-hardening or tampered copy is re-verified against the package
+    # and refreshed, so the tripwire isn't skipped exactly where tampering persists.
+    if os.path.isfile(script_dst) and expected and _sha(script_dst) == expected:
         print("  ✅ Xiaoyuzhou transcription script already installed")
-    else:
-        # Copy script from package — only after verifying it against the manifest.
-        script_src = os.path.join(os.path.dirname(__file__), "scripts", "transcribe_xiaoyuzhou.sh")
-        if not _verify_vendored_script("transcribe_xiaoyuzhou.sh"):
-            print("  [!]  Skipped: transcription script failed integrity check.")
-        elif os.path.isfile(script_src):
-            try:
-                os.makedirs(tools_dir, exist_ok=True)
-                import shutil as _shutil
-                _shutil.copy2(script_src, script_dst)
-                os.chmod(script_dst, 0o755)
+    elif not _verify_vendored_script("transcribe_xiaoyuzhou.sh"):
+        print("  [!]  Skipped: packaged transcription script failed integrity check.")
+    elif os.path.isfile(script_src):
+        try:
+            os.makedirs(tools_dir, exist_ok=True)
+            import shutil as _shutil
+            refreshing = os.path.isfile(script_dst)
+            _shutil.copy2(script_src, script_dst)
+            os.chmod(script_dst, 0o755)
+            if refreshing:
+                print("  ✅ Xiaoyuzhou script refreshed (stale/tampered copy replaced with verified)")
+            else:
                 print("  ✅ Xiaoyuzhou transcription script installed")
-            except Exception as e:
-                print(f"  [!]  Failed to install script: {e}")
-        else:
-            print("  [!]  Script source not found in package")
+        except Exception as e:
+            print(f"  [!]  Failed to install script: {e}")
+    else:
+        print("  [!]  Script source not found in package")
 
     # Check ffmpeg
     if shutil.which("ffmpeg"):
