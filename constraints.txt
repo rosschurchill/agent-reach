@@ -22,3 +22,6 @@ types-PyYAML==6.0.12.20250915
 #   pip:  linkedin-scraper-mcp==4.14.0    (published 2026-06-10)
 #   git:  rdt-cli @5e4fb3720d5c174e976cd425ccc3b879d52cac66
 #         (github.com/public-clis/rdt-cli — pinned commit)
+#   sh:   NodeSource setup script — vendored at agent_reach/scripts/nodesource_setup_22.x.sh
+#         sha256 575583bbac2fccc0b5edd0dbc03e222d9f9dc8d724da996d22754d6411104fd1
+#         (_NODESOURCE_SETUP_SHA256; run `agent-reach verify-node-script` to check drift)

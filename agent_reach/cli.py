@@ -20,6 +20,17 @@ from agent_reach import __version__
 # Pinned to the 0.4.2 state — PyPI still only has 0.4.1 (upstream issue #10).
 _RDT_GIT_SOURCE = "git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66"
 
+# NodeSource Node.js apt-repo setup: we ship a VENDORED, reviewed copy at
+# agent_reach/scripts/nodesource_setup_22.x.sh and run that instead of
+# curl|bash-ing it fresh at runtime. This sha256 is the reviewed pin — a mismatch
+# means our copy was tampered with (refuse to run). It is also the tripwire for
+# upstream drift: `agent-reach verify-node-script` (and CI) re-fetch the upstream
+# script and compare, so a NodeSource change forces a fresh review + bump.
+_NODESOURCE_SETUP_SHA256 = (
+    "575583bbac2fccc0b5edd0dbc03e222d9f9dc8d724da996d22754d6411104fd1"
+)
+_NODESOURCE_SETUP_URL = "https://deb.nodesource.com/setup_22.x"
+
 
 def _ensure_utf8_console():
     """Best-effort Windows console UTF-8 setup for CLI runtime only."""
@@ -130,6 +141,12 @@ def main():
     # ── version ──
     sub.add_parser("version", help="Show version")
 
+    # ── verify-node-script ──
+    sub.add_parser(
+        "verify-node-script",
+        help="Check the vendored NodeSource setup script against upstream (drift tripwire)",
+    )
+
     args = parser.parse_args()
 
     # Suppress loguru noise unless --verbose
@@ -163,6 +180,8 @@ def main():
         _cmd_format(args)
     elif args.command == "transcribe":
         _cmd_transcribe(args)
+    elif args.command == "verify-node-script":
+        sys.exit(_check_nodesource_script_drift())
 
 
 # ── Command handlers ────────────────────────────────
@@ -513,12 +532,92 @@ def _cmd_format(args):
         print(json.dumps(cleaned, ensure_ascii=False, indent=2))
 
 
+def _vendored_nodesource_script_path() -> str:
+    """Absolute path to the vendored NodeSource setup script shipped in the package."""
+    return os.path.join(
+        os.path.dirname(__file__), "scripts", "nodesource_setup_22.x.sh"
+    )
+
+
+def _run_vendored_nodesource_setup() -> bool:
+    """Verify + run our vendored, sha256-pinned NodeSource apt-repo setup script.
+
+    We ship a reviewed copy rather than fetching + bash-ing it from the network at
+    runtime. Before running we verify the file's sha256 against the reviewed pin;
+    a mismatch (tampering / an un-reviewed swap) refuses to run. Returns True only
+    if the repo was configured (script exit 0).
+    """
+    import hashlib
+    import subprocess
+
+    script = _vendored_nodesource_script_path()
+    try:
+        with open(script, "rb") as f:
+            data = f.read()
+    except OSError as e:
+        print(f"  [!]  vendored NodeSource setup script missing: {e}")
+        return False
+    digest = hashlib.sha256(data).hexdigest()
+    if digest != _NODESOURCE_SETUP_SHA256:
+        print("  [X] NodeSource setup script failed hash verification — refusing to run.")
+        print(f"      expected {_NODESOURCE_SETUP_SHA256[:16]}…, got {digest[:16]}…")
+        return False
+    try:
+        r = subprocess.run(["bash", script], capture_output=True, timeout=120)
+        return r.returncode == 0
+    except (subprocess.SubprocessError, OSError) as e:
+        print(f"  [!]  Node.js apt-repo setup failed: {e}")
+        return False
+
+
+def _check_nodesource_script_drift(timeout: int = 15) -> int:
+    """Re-fetch the upstream NodeSource setup script and compare to our vendored pin.
+
+    The tripwire for 're-review when upstream changes': prints MATCH/DRIFT and
+    returns 0 (in sync), 1 (drift — upstream changed, re-vendor + review + bump the
+    pin), or 2 (couldn't fetch). Never modifies anything.
+    """
+    import hashlib
+    import subprocess
+
+    vendored = _vendored_nodesource_script_path()
+    try:
+        with open(vendored, "rb") as f:
+            local_digest = hashlib.sha256(f.read()).hexdigest()
+    except OSError as e:
+        print(f"[X] vendored script unreadable: {e}")
+        return 2
+    if local_digest != _NODESOURCE_SETUP_SHA256:
+        print("[X] vendored script does NOT match the pinned sha256 — local tampering.")
+        return 1
+    try:
+        r = subprocess.run(
+            ["curl", "-fsSL", _NODESOURCE_SETUP_URL],
+            capture_output=True, timeout=timeout,
+        )
+    except (subprocess.SubprocessError, OSError) as e:
+        print(f"[!] could not fetch upstream script to compare: {e}")
+        return 2
+    if r.returncode != 0 or not r.stdout:
+        print("[!] could not fetch upstream script to compare (curl failed).")
+        return 2
+    upstream_digest = hashlib.sha256(r.stdout).hexdigest()
+    if upstream_digest == _NODESOURCE_SETUP_SHA256:
+        print(f"[✓] NodeSource setup script in sync (sha256 {_NODESOURCE_SETUP_SHA256[:16]}…).")
+        return 0
+    print("[!] DRIFT: upstream NodeSource setup script changed.")
+    print(f"    pinned:   {_NODESOURCE_SETUP_SHA256}")
+    print(f"    upstream: {upstream_digest}")
+    print("    → re-vendor agent_reach/scripts/nodesource_setup_22.x.sh, review the diff,")
+    print("      and update _NODESOURCE_SETUP_SHA256.")
+    return 1
+
+
 def _install_system_deps():
     """Install system-level dependencies: gh CLI, Node.js (for mcporter)."""
     import shutil
     import subprocess
     import platform
-    import tempfile
 
     print("Checking system dependencies...")
 
@@ -570,42 +669,39 @@ def _install_system_deps():
         else:
             print("  [!]  gh CLI not found. Install: https://cli.github.com")
 
-    # ── Node.js (needed for mcporter) ──
+    # ── Node.js (needed only for mcporter-backed channels: Exa/LinkedIn/XHS-MCP) ──
+    # We never curl|bash NodeSource's setup script fresh at runtime (remote code as
+    # root). Instead we run our VENDORED, sha256-pinned copy after verifying its
+    # hash; the script only adds NodeSource's signed apt repo (same secure pattern
+    # as the gh CLI install above), and we apt-get install nodejs ourselves.
     if shutil.which("node") and shutil.which("npm"):
         print("  ✅ Node.js already installed")
+    elif platform.system().lower() != "linux":
+        print("  -- Node.js not found — needed only for Exa/LinkedIn/XHS-MCP.")
+        print("     Install from https://nodejs.org (or: fnm install 22 / nvm install 22)")
     else:
-        print("  Installing Node.js...")
-        try:
-            # Use NodeSource setup script without invoking a shell pipeline.
-            with tempfile.NamedTemporaryFile(delete=False, suffix=".sh") as tf:
-                script_path = tf.name
-            subprocess.run(
-                ["curl", "-fsSL", "https://deb.nodesource.com/setup_22.x", "-o", script_path],
-                capture_output=True, timeout=60,
-            )
-            subprocess.run(
-                ["bash", script_path],
-                capture_output=True, timeout=120,
-            )
-            try:
-                os.unlink(script_path)
-            except Exception:
-                pass
+        print("  Configuring Node.js apt repo (vendored NodeSource setup, sha256-pinned)...")
+        if _run_vendored_nodesource_setup():
             subprocess.run(
                 ["apt-get", "install", "-y", "-qq", "nodejs"],
                 capture_output=True, timeout=120,
             )
-            if shutil.which("node"):
-                print("  ✅ Node.js installed")
-            else:
-                print("  [!]  Node.js install failed. Try: apt install nodejs npm, or nvm install 22, or download from https://nodejs.org")
-        except Exception:
-            print("  [!]  Node.js install failed. Try: apt install nodejs npm, or nvm install 22, or download from https://nodejs.org")
+        if shutil.which("node"):
+            print("  ✅ Node.js installed")
+        else:
+            print("  [!]  Node.js not installed. Install from https://nodejs.org, "
+                  "or: fnm install 22 / nvm install 22, or: sudo apt-get install -y nodejs npm")
 
     # ── undici (proxy support for Node.js fetch) ──
     npm_cmd = shutil.which("npm")
     if npm_cmd:
-        npm_root = subprocess.run([npm_cmd, "root", "-g"], capture_output=True, encoding="utf-8", errors="replace", timeout=5).stdout.strip()
+        try:
+            npm_root = subprocess.run(
+                [npm_cmd, "root", "-g"], capture_output=True, encoding="utf-8",
+                errors="replace", timeout=5,
+            ).stdout.strip()
+        except (subprocess.SubprocessError, OSError):
+            npm_root = ""  # a slow/broken npm must not abort the whole installer
         undici_path = os.path.join(npm_root, "undici", "index.js") if npm_root else ""
         if os.path.exists(undici_path):
             print("  ✅ undici already installed (Node.js proxy support)")
@@ -883,7 +979,7 @@ def _install_system_deps_dryrun():
 
     checks = [
         ("gh CLI", ["gh"], "apt install gh / brew install gh"),
-        ("Node.js", ["node"], "curl NodeSource setup | bash + apt install nodejs"),
+        ("Node.js", ["node"], "vendored+sha256-pinned NodeSource apt-repo setup, then apt install nodejs"),
     ]
 
     for label, binaries, method in checks:
