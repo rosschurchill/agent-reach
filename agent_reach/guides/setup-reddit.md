@@ -17,9 +17,9 @@ Agent Reach 通过 **rdt-cli** 实现 Reddit 的搜索和阅读功能：
 which rdt && echo "installed" || echo "not installed"
 ```
 
-2. 如果未安装，自动安装（PyPI 版本暂时落后，从 GitHub 安装最新版）：
+2. 如果未安装，自动安装（PyPI 版本暂时落后，从 GitHub 按固定 commit 安装）：
 ```bash
-pipx install 'git+https://github.com/public-clis/rdt-cli.git'
+pipx install 'git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66'
 ```
 
 或一键安装：

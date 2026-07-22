@@ -906,13 +906,13 @@ def _install_mcporter():
             return
         try:
             subprocess.run(
-                ["npm", "install", "-g", "mcporter"],
+                ["npm", "install", "-g", "mcporter@0.12.0"],
                 capture_output=True, encoding="utf-8", errors="replace", timeout=120,
             )
             if shutil.which("mcporter"):
                 print("  ✅ mcporter installed")
             else:
-                print("  [X] mcporter install failed. Retry: npm install -g mcporter (check network/timeout), or try: npx mcporter@latest list")
+                print("  [X] mcporter install failed. Retry: npm install -g mcporter@0.12.0 (check network/timeout), or try: npx mcporter@0.12.0 list")
                 return
         except Exception as e:
             print(f"  [X] mcporter install failed: {e}")
@@ -948,7 +948,7 @@ def _install_mcporter_safe():
         print("  To configure Exa search: mcporter config add exa https://mcp.exa.ai/mcp")
     else:
         print("  -- mcporter not installed")
-        print("  To install: npm install -g mcporter")
+        print("  To install: npm install -g mcporter@0.12.0")
         print("  Then configure Exa: mcporter config add exa https://mcp.exa.ai/mcp")
 
 
@@ -1487,7 +1487,7 @@ def _cmd_setup():
 
     if not shutil.which("mcporter"):
         print("  当前状态: -- mcporter 未安装")
-        print("  安装：npm install -g mcporter")
+        print("  安装：npm install -g mcporter@0.12.0")
         print("  然后：mcporter config add exa https://mcp.exa.ai/mcp")
         print()
     else:

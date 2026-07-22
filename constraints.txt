@@ -15,3 +15,10 @@ ruff==0.15.1
 mypy==1.19.1
 types-requests==2.32.4.20260107
 types-PyYAML==6.0.12.20250915
+
+# ── External runtime tools (not pip deps; installed by `agent-reach install`) ──
+# Recorded here so every pin lives in one reviewed place. Bump = a reviewed change.
+#   npm:  mcporter@0.12.0                 (published 2026-06-10)
+#   pip:  linkedin-scraper-mcp==4.14.0    (published 2026-06-10)
+#   git:  rdt-cli @5e4fb3720d5c174e976cd425ccc3b879d52cac66
+#         (github.com/public-clis/rdt-cli — pinned commit)

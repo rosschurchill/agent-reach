@@ -6,7 +6,7 @@ from agent_reach.probe import probe_command
 from .base import Channel
 
 #: mcporter 是 npm 包，断链处方与默认的 pipx/uv 不同
-_MCPORTER_BROKEN_HINT = "mcporter 无法执行（node 环境损坏），重装：\n  npm install -g mcporter"
+_MCPORTER_BROKEN_HINT = "mcporter 无法执行（node 环境损坏），重装：\n  npm install -g mcporter@0.12.0"
 
 
 class LinkedInChannel(Channel):
@@ -25,7 +25,7 @@ class LinkedInChannel(Channel):
         if probe.status == "missing":
             return "off", (
                 "基本内容可通过 Jina Reader 读取。完整功能需要：\n"
-                "  pip install linkedin-scraper-mcp\n"
+                "  pip install linkedin-scraper-mcp==4.14.0\n"
                 "  mcporter config add linkedin http://localhost:3000/mcp\n"
                 "  详见 https://github.com/stickerdaniel/linkedin-mcp-server"
             )
@@ -38,6 +38,6 @@ class LinkedInChannel(Channel):
             return "ok", "完整可用（Profile、公司、职位搜索）"
         return "off", (
             "mcporter 已装但 LinkedIn MCP 未配置。运行：\n"
-            "  pip install linkedin-scraper-mcp\n"
+            "  pip install linkedin-scraper-mcp==4.14.0\n"
             "  mcporter config add linkedin http://localhost:3000/mcp"
         )

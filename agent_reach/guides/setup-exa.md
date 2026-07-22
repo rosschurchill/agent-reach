@@ -12,7 +12,7 @@ Exa 是一个 AI 语义搜索引擎。通过 MCP 接入，**免费、无需 API 
 
 ### 1. 安装 mcporter
 ```bash
-npm install -g mcporter
+npm install -g mcporter@0.12.0
 ```
 
 ### 2. 注册 Exa MCP

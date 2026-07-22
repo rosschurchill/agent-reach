@@ -6,7 +6,7 @@ from agent_reach.probe import probe_command
 from .base import Channel
 
 #: mcporter 是 npm 包，断链处方与默认的 pipx/uv 不同
-_MCPORTER_BROKEN_HINT = "mcporter 无法执行（node 环境损坏），重装：\n  npm install -g mcporter"
+_MCPORTER_BROKEN_HINT = "mcporter 无法执行（node 环境损坏），重装：\n  npm install -g mcporter@0.12.0"
 
 
 class ExaSearchChannel(Channel):
@@ -24,7 +24,7 @@ class ExaSearchChannel(Channel):
         if probe.status == "missing":
             return "off", (
                 "需要 mcporter + Exa MCP。安装：\n"
-                "  npm install -g mcporter\n"
+                "  npm install -g mcporter@0.12.0\n"
                 "  mcporter config add exa https://mcp.exa.ai/mcp"
             )
         if probe.status == "broken":

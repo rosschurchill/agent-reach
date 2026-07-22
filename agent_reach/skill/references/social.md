@@ -224,7 +224,7 @@ rdt popular --limit 10          # 浏览热门
 rdt all --limit 10              # 浏览 /r/all
 ```
 
-> **安装**: `pipx install 'git+https://github.com/public-clis/rdt-cli.git'`（PyPI 版本落后，需从 GitHub 装 v0.4.2+）。先 `rdt login` 才能搜索和阅读（服务器无浏览器时手动写 Cookie，见 doctor 提示）。
+> **安装**: `pipx install 'git+https://github.com/public-clis/rdt-cli.git@5e4fb3720d5c174e976cd425ccc3b879d52cac66'`（PyPI 版本落后，从 GitHub 按固定 commit 安装 v0.4.2+）。先 `rdt login` 才能搜索和阅读（服务器无浏览器时手动写 Cookie，见 doctor 提示）。
 > 建议使用 `--yaml` 输出，对 AI agent 更友好。
 
 ### 高级选项：官方 API + PRAW（仅限已有凭证的用户）
