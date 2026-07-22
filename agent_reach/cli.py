@@ -1111,7 +1111,12 @@ def _cmd_configure(args):
 
 
 def _cmd_transcribe(args):
-    """Transcribe a URL or local audio file via Whisper (Groq → OpenAI fallback)."""
+    """Transcribe an audio URL via Whisper (Groq → OpenAI fallback).
+
+    URL-only by design: the download path is SSRF-guarded and local file paths
+    are refused here (see transcribe(allow_local_file=...)), so an agent can't
+    be steered into reading an arbitrary local file through this command.
+    """
     from pathlib import Path
 
     from agent_reach.transcribe import TranscribeError, transcribe

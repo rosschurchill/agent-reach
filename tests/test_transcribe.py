@@ -185,6 +185,7 @@ class TestOrchestrator:
             str(chunk_file),
             out_dir=tmp_path / "work",
             config=fake_config,
+            allow_local_file=True,
         )
         assert text == "transcript text"
 
@@ -213,12 +214,46 @@ class TestOrchestrator:
             str(chunk_file),
             out_dir=tmp_path / "work",
             config=fake_config,
+            allow_local_file=True,
         )
         assert text == "part one\npart two"
 
     def test_no_provider_configured_fails_fast(self, fake_config, chunk_file):
         with pytest.raises(tr.NoProviderConfigured):
             tr.transcribe(str(chunk_file), config=fake_config)
+
+    def test_local_file_refused_without_optin(self, fake_config, chunk_file, tmp_path):
+        """CR-005: a local path is refused unless allow_local_file=True, so a
+        path-shaped string can't bypass the download URL guard."""
+        fake_config.set("groq_api_key", "gsk_test")
+        with pytest.raises(tr.TranscribeError, match="allow_local_file"):
+            tr.transcribe(
+                str(chunk_file), out_dir=tmp_path / "w", config=fake_config
+            )
+
+
+class TestDownloadUrlGuard:
+    """CR-005: SSRF / scheme / arg-injection guard on the yt-dlp download path."""
+
+    @pytest.mark.parametrize(
+        "url",
+        [
+            "http://127.0.0.1/x",
+            "http://169.254.169.254/latest/meta-data/",
+            "http://localhost/a.mp3",
+            "http://10.0.0.5/a.mp3",
+            "file:///etc/passwd",
+            "ftp://example.com/a.mp3",
+            "not-a-url",
+        ],
+    )
+    def test_unsafe_urls_rejected(self, url):
+        with pytest.raises(tr.TranscribeError):
+            tr._assert_safe_public_url(url)
+
+    def test_public_url_allowed(self):
+        # Resolves to a public address; must not raise.
+        tr._assert_safe_public_url("https://example.com/a.mp3")
 
     def test_invalid_provider_string(self, fake_config, chunk_file):
         with pytest.raises(tr.TranscribeError, match="unknown provider"):

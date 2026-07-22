@@ -6,18 +6,22 @@ Whisper-compatible API. Defaults to Groq's free `whisper-large-v3` and falls
 back to OpenAI's `whisper-1` on HTTP error.
 
 Public entry point:
-    transcribe(source, *, provider="auto", out_dir=None, config=None) -> str
+    transcribe(source, *, provider="auto", out_dir=None, config=None,
+               allow_local_file=False) -> str
 
 Designed to be importable from channels (e.g. YouTubeChannel.transcribe).
 """
 
 from __future__ import annotations
 
+import ipaddress
 import shutil
+import socket
 import subprocess
 import tempfile
 from pathlib import Path
 from typing import List, Optional
+from urllib.parse import urlsplit
 
 import requests
 
@@ -74,8 +78,44 @@ def _run(cmd: List[str], timeout: int = 600) -> None:
         )
 
 
+def _assert_safe_public_url(url: str) -> None:
+    """Raise TranscribeError unless `url` is an http(s) URL whose host resolves
+    only to public addresses.
+
+    Guards the yt-dlp download path (untrusted "transcribe this URL" input)
+    against SSRF to loopback / private / link-local endpoints — including the
+    cloud metadata service at 169.254.169.254 — and against non-network schemes
+    (file:, etc.).
+    """
+    parts = urlsplit(url)
+    if parts.scheme not in ("http", "https"):
+        raise TranscribeError(f"refusing to download from non-http(s) URL: {url!r}")
+    host = parts.hostname
+    if not host:
+        raise TranscribeError(f"URL has no host: {url!r}")
+    try:
+        infos = socket.getaddrinfo(host, None)
+    except socket.gaierror as e:
+        raise TranscribeError(f"cannot resolve host {host!r}: {e}")
+    for info in infos:
+        addr = info[4][0].split("%")[0]  # strip IPv6 scope id, e.g. fe80::1%eth0
+        ip = ipaddress.ip_address(addr)
+        if (
+            ip.is_private
+            or ip.is_loopback
+            or ip.is_link_local
+            or ip.is_reserved
+            or ip.is_multicast
+            or ip.is_unspecified
+        ):
+            raise TranscribeError(
+                f"refusing to download from non-public address {addr} (host {host!r})"
+            )
+
+
 def download_audio(url: str, out_dir: Path) -> Path:
     """Download audio with yt-dlp into out_dir; return the resulting file path."""
+    _assert_safe_public_url(url)
     _require("yt-dlp")
     template = out_dir / "source.%(ext)s"
     _run(
@@ -88,6 +128,7 @@ def download_audio(url: str, out_dir: Path) -> Path:
             "0",
             "-o",
             str(template),
+            "--",  # end-of-options: a URL starting with '-' must not parse as a flag
             url,
         ],
         timeout=1800,  # long podcasts over slow networks — generous but bounded
@@ -210,11 +251,16 @@ def transcribe(
     provider: str = "auto",
     out_dir: Optional[Path] = None,
     config: Optional[Config] = None,
+    allow_local_file: bool = False,
 ) -> str:
-    """Transcribe a URL or local file path. Returns the joined transcript text.
+    """Transcribe a URL (or, with `allow_local_file=True`, a local file path).
+    Returns the joined transcript text.
 
     `provider` is one of `auto` (groq → openai), `groq`, or `openai`.
     `out_dir` defaults to a fresh temp directory; intermediate files stay there.
+    `allow_local_file` must be set explicitly to accept a local path as the
+    source — untrusted callers (fetched URLs) get the safe URL-only default so a
+    path-shaped string can't bypass the download URL guard.
     """
     cfg = config or Config()
     order = _provider_order(provider)
@@ -229,6 +275,11 @@ def transcribe(
 
     src_path = Path(source)
     if src_path.is_file():
+        if not allow_local_file:
+            raise TranscribeError(
+                "refusing to transcribe a local file path; pass allow_local_file=True "
+                "to opt in (URL input is the default for untrusted callers)"
+            )
         audio = src_path
     else:
         audio = download_audio(source, work_dir)
