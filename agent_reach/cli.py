@@ -1278,9 +1278,11 @@ def _cmd_configure(args):
 def _cmd_transcribe(args):
     """Transcribe an audio URL via Whisper (Groq → OpenAI fallback).
 
-    URL-only by design: the download path is SSRF-guarded and local file paths
-    are refused here (see transcribe(allow_local_file=...)), so an agent can't
-    be steered into reading an arbitrary local file through this command.
+    URL-only by design: the download path applies a best-effort public-URL
+    pre-check (not a hard SSRF boundary — yt-dlp re-resolves DNS and follows
+    redirects; see transcribe._assert_safe_public_url) and local file paths are
+    refused here (see transcribe(allow_local_file=...)), so an agent can't be
+    steered into reading an arbitrary local file through this command.
     """
     from pathlib import Path
 
@@ -1293,8 +1295,24 @@ def _cmd_transcribe(args):
         sys.exit(1)
 
     if args.output:
-        Path(args.output).write_text(text + "\n", encoding="utf-8")
-        print(f"✅ Transcript written to {args.output}")
+        # Contain the -o sink: the transcript is attacker-influenceable (adversary
+        # controls the source audio) and the path is agent-chosen, so refuse writes
+        # outside the current working directory — otherwise 'transcribe X and save
+        # to ~/.bashrc' becomes an arbitrary-file-write primitive (CR-009).
+        cwd = Path.cwd().resolve()
+        dest = Path(args.output).resolve()
+        if cwd != dest and cwd not in dest.parents:
+            print(f"❌ refusing to write outside the current directory: {args.output}")
+            print(text)  # don't lose the paid transcription
+            sys.exit(1)
+        try:
+            dest.write_text(text + "\n", encoding="utf-8")
+            print(f"✅ Transcript written to {dest}")
+        except OSError as e:
+            # Never discard a multi-minute transcription on a write failure.
+            print(f"⚠️  could not write {dest} ({e}) — printing transcript instead:")
+            print(text)
+            sys.exit(1)
     else:
         print(text)
 

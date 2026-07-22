@@ -78,14 +78,38 @@ def _run(cmd: List[str], timeout: int = 600) -> None:
         )
 
 
-def _assert_safe_public_url(url: str) -> None:
-    """Raise TranscribeError unless `url` is an http(s) URL whose host resolves
-    only to public addresses.
+def _ip_is_non_public(ip) -> bool:
+    """True if `ip` is any non-public address we must refuse.
 
-    Guards the yt-dlp download path (untrusted "transcribe this URL" input)
-    against SSRF to loopback / private / link-local endpoints — including the
-    cloud metadata service at 169.254.169.254 — and against non-network schemes
-    (file:, etc.).
+    Unwraps IPv4-mapped / 6to4 IPv6 forms first, so ``::ffff:127.0.0.1`` (whose
+    is_loopback is False) is classified by its embedded IPv4 loopback (CR-008).
+    """
+    if isinstance(ip, ipaddress.IPv6Address):
+        embedded = ip.ipv4_mapped or ip.sixtofour
+        if embedded is not None:
+            ip = embedded
+    return (
+        ip.is_private
+        or ip.is_loopback
+        or ip.is_link_local
+        or ip.is_reserved
+        or ip.is_multicast
+        or ip.is_unspecified
+    )
+
+
+def _assert_safe_public_url(url: str) -> None:
+    """Best-effort public-URL pre-check for the yt-dlp download path.
+
+    Rejects non-http(s) schemes and hosts that resolve to any private / loopback
+    / link-local / reserved / metadata (169.254.169.254) address — the untrusted
+    "transcribe this URL" boundary.
+
+    RESIDUAL RISK (not fully closed here): this validates the host at check time,
+    but yt-dlp independently re-resolves DNS and follows HTTP redirects, so a DNS
+    rebind or a public→private 302 can still reach an internal endpoint (TOCTOU,
+    CWE-367). Treat this as a pre-filter, not a hard SSRF boundary; do not feed it
+    fully attacker-controlled URLs on a host with sensitive internal services.
     """
     parts = urlsplit(url)
     if parts.scheme not in ("http", "https"):
@@ -97,17 +121,11 @@ def _assert_safe_public_url(url: str) -> None:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror as e:
         raise TranscribeError(f"cannot resolve host {host!r}: {e}")
+    if not infos:
+        raise TranscribeError(f"host {host!r} resolved to no addresses")
     for info in infos:
         addr = info[4][0].split("%")[0]  # strip IPv6 scope id, e.g. fe80::1%eth0
-        ip = ipaddress.ip_address(addr)
-        if (
-            ip.is_private
-            or ip.is_loopback
-            or ip.is_link_local
-            or ip.is_reserved
-            or ip.is_multicast
-            or ip.is_unspecified
-        ):
+        if _ip_is_non_public(ipaddress.ip_address(addr)):
             raise TranscribeError(
                 f"refusing to download from non-public address {addr} (host {host!r})"
             )

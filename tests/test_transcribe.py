@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """Tests for agent_reach.transcribe — provider routing, fallback, and errors."""
 
+import socket
 from typing import List
 
 import pytest
@@ -233,27 +234,57 @@ class TestOrchestrator:
 
 
 class TestDownloadUrlGuard:
-    """CR-005: SSRF / scheme / arg-injection guard on the yt-dlp download path."""
+    """CR-007/008: best-effort SSRF pre-check on the yt-dlp download path.
+    DNS is mocked (CR-010) so the suite is deterministic offline."""
+
+    @staticmethod
+    def _patch_dns(monkeypatch, host, ip):
+        family = socket.AF_INET6 if ":" in ip else socket.AF_INET
+        sockaddr = (ip, 0, 0, 0) if ":" in ip else (ip, 0)
+
+        def fake_gai(h, *a, **k):
+            if h != host:
+                raise socket.gaierror(f"NXDOMAIN {h}")
+            return [(family, socket.SOCK_STREAM, 0, "", sockaddr)]
+
+        monkeypatch.setattr(tr.socket, "getaddrinfo", fake_gai)
 
     @pytest.mark.parametrize(
-        "url",
+        "ip",
         [
-            "http://127.0.0.1/x",
-            "http://169.254.169.254/latest/meta-data/",
-            "http://localhost/a.mp3",
-            "http://10.0.0.5/a.mp3",
-            "file:///etc/passwd",
-            "ftp://example.com/a.mp3",
-            "not-a-url",
+            "127.0.0.1",            # loopback
+            "169.254.169.254",      # cloud metadata / link-local
+            "10.0.0.5",             # private
+            "::ffff:127.0.0.1",     # IPv4-mapped loopback (CR-008)
+            "::ffff:169.254.169.254",
         ],
     )
-    def test_unsafe_urls_rejected(self, url):
+    def test_private_resolution_rejected(self, monkeypatch, ip):
+        self._patch_dns(monkeypatch, "evil.test", ip)
+        with pytest.raises(tr.TranscribeError):
+            tr._assert_safe_public_url("http://evil.test/x")
+
+    @pytest.mark.parametrize("url", ["file:///etc/passwd", "ftp://x/a.mp3", "not-a-url"])
+    def test_bad_scheme_rejected(self, url):
         with pytest.raises(tr.TranscribeError):
             tr._assert_safe_public_url(url)
 
-    def test_public_url_allowed(self):
-        # Resolves to a public address; must not raise.
-        tr._assert_safe_public_url("https://example.com/a.mp3")
+    def test_public_resolution_allowed(self, monkeypatch):
+        self._patch_dns(monkeypatch, "ok.test", "93.184.216.34")
+        tr._assert_safe_public_url("https://ok.test/a.mp3")  # must not raise
+
+    def test_empty_resolution_rejected(self, monkeypatch):
+        monkeypatch.setattr(tr.socket, "getaddrinfo", lambda *a, **k: [])
+        with pytest.raises(tr.TranscribeError):
+            tr._assert_safe_public_url("http://weird.test/x")
+
+    def test_nxdomain_rejected(self, monkeypatch):
+        def boom(*a, **k):
+            raise socket.gaierror("nope")
+
+        monkeypatch.setattr(tr.socket, "getaddrinfo", boom)
+        with pytest.raises(tr.TranscribeError):
+            tr._assert_safe_public_url("http://nx.test/x")
 
     def test_invalid_provider_string(self, fake_config, chunk_file):
         with pytest.raises(tr.TranscribeError, match="unknown provider"):

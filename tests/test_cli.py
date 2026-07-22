@@ -40,13 +40,28 @@ class TestCLI:
         captured = capsys.readouterr()
         assert "hello transcript" in captured.out
 
-    def test_transcribe_command_writes_output_file(self, capsys, tmp_path):
-        out_file = tmp_path / "t.txt"
+    def test_transcribe_command_writes_output_file(self, capsys, tmp_path, monkeypatch):
+        monkeypatch.chdir(tmp_path)  # write target must be inside cwd (CR-009)
         with patch("agent_reach.transcribe.transcribe", return_value="saved text"):
-            with patch("sys.argv", ["agent-reach", "transcribe", "audio.mp3", "-o", str(out_file)]):
+            with patch("sys.argv", ["agent-reach", "transcribe", "audio.mp3", "-o", "t.txt"]):
                 main()
-        assert out_file.read_text(encoding="utf-8").strip() == "saved text"
+        assert (tmp_path / "t.txt").read_text(encoding="utf-8").strip() == "saved text"
         assert "Transcript written" in capsys.readouterr().out
+
+    def test_transcribe_refuses_output_outside_cwd(self, capsys, tmp_path, monkeypatch):
+        """CR-009: an -o path outside cwd is refused (no arbitrary file write),
+        but the transcript is still printed so the work isn't lost."""
+        monkeypatch.chdir(tmp_path)
+        outside = tmp_path.parent / "escape.txt"
+        with patch("agent_reach.transcribe.transcribe", return_value="secret text"):
+            with patch("sys.argv", ["agent-reach", "transcribe", "audio.mp3", "-o", str(outside)]):
+                with pytest.raises(SystemExit) as ei:
+                    main()
+        assert ei.value.code != 0
+        assert not outside.exists()
+        out = capsys.readouterr().out
+        assert "refusing to write outside" in out
+        assert "secret text" in out  # transcript not lost
 
     def test_parse_twitter_cookie_input_separate_values(self):
         auth_token, ct0 = cli._parse_twitter_cookie_input("token123 ct0abc")
