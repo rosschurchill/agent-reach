@@ -8,16 +8,25 @@ Runtime Guardian + manual verification). Full findings in
 are design + supply-chain hardening changes. Do all work on `hardening`; show diffs before commit.
 
 ## Ticket summary
-| ID | Sev | Title | Phase |
-|----|-----|-------|-------|
-| AR-001 | MED | Remove remote `main`-branch fetch-and-follow; vendor install/update docs | 1 |
-| AR-002 | MED | Remove the self-update `check-update` nudge from the skill | 1 |
-| AR-003 | MED | Narrow XHS/Xueqiu cookie capture to named tokens | 2 |
-| AR-004 | LOW | Align guide docs to the SHA-pinned tooling (rdt-cli); pin mcporter/linkedin-mcp | 2 |
-| AR-005 | LOW | Make `get_status` MCP tool side-effect-free (or label it) | 3 |
-| AR-006 | INFO | Pass an allow-listed env to probed child processes | 3 |
-| AR-007 | INFO | Make the remote `exa` MCP endpoint opt-in + documented | 3 |
-| AR-008 | — | Add our security gate (deps pin check + scan) + document trust boundary | 4 |
+Status legend: **Done** = fix landed + acceptance command run · **In Progress** · **Not Started**.
+(CR-### cross-references are the `/graph-review` tickets in `.claude-review/REMEDIATION.md` that carried out the work.)
+
+| ID | Sev | Title | Phase | Status |
+|----|-----|-------|-------|--------|
+| AR-001 | MED | Remove remote `main`-branch fetch-and-follow; vendor install/update docs | 1 | **Done** (CR-001/002; acceptance grep = 0) |
+| AR-002 | MED | Remove the self-update `check-update` nudge from the skill | 1 | **Done** (CR-001) |
+| AR-003 | MED | Narrow XHS/Xueqiu cookie capture to named tokens | 2 | Not Started |
+| AR-004 | LOW | Align guide docs to the SHA-pinned tooling (rdt-cli); pin mcporter/linkedin-mcp | 2 | Not Started |
+| AR-005 | LOW | Make `get_status` MCP tool side-effect-free (or label it) | 3 | Not Started |
+| AR-006 | INFO | Pass an allow-listed env to probed child processes | 3 | **Done** (CR-006) |
+| AR-007 | INFO | Make the remote `exa` MCP endpoint opt-in + documented | 3 | Not Started |
+| AR-008 | — | Add our security gate (deps pin check + scan) + document trust boundary | 4 | Not Started |
+
+> Also landed beyond the original AR list, via the `/graph-review` remediation: **CR-003** (stop echoing
+> GitHub release-note bodies into agent context), **CR-004** (guard non-JSON HTTP 200 in check-update/watch),
+> **CR-005** (the `transcribe.py` SSRF/arg-injection guard — found *missing*, now added), **CR-007/008**
+> (OpenCLI probe memoization + Edge/Brave/Chromium detection), **CR-009–012** (backend-override + twitter
+> probe hardening).
 
 ---
 

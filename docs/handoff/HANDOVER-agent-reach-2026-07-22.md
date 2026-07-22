@@ -64,20 +64,32 @@ list-arg `subprocess` everywhere — no `shell=True`, cookies written `0o600`, v
 9. Re-run `/ai-scan <this-fork>` → expect CONDITIONAL→CLEAR once findings 1–4 are closed.
 
 ## Current state
-- Project folder created at `/home/ross/Documents/projects/agent-reach/` (this handover only so far).
-- **Fork not yet created; no code cloned in** — awaiting your go-ahead to fork on GitHub + clone the pinned SHA.
-- Upstream review artifacts live in the read-only clone at `/tmp/ar-review.*/repo` (temporary).
+- The working copy is **fully populated**: the pinned `v1.5.0` codebase is present under
+  `agent_reach/` in this folder, on branch **`hardening`** with its own git history.
+- **Remediation is underway on `hardening`.** A `/graph-review` of `agent_reach/` (verdict
+  CONDITIONAL) drove a `/fix-loop` that has landed the security/reliability half of the plan
+  (see `docs/review/ACTION-PLAN-hardening.md` for AR-ticket status and `.claude-review/REMEDIATION.md`
+  for the CR-ticket plan). Shipped so far: remote fetch-and-follow removed from both SKILL files
+  and the CLI update/watch surface (AR-001/002), release-note echo dropped, `resp.json()` guarded,
+  child-process env allow-listed (AR-006), OpenCLI probe memoized + Edge/Brave/Chromium detection,
+  twitter backend-override + probe hardening.
+- **Correction to the "Keep (don't regress)" list above:** the `transcribe.py` SSRF guard it credits
+  (`_assert_safe_public_url` + `_BLOCKED_HOSTS`) did **not** actually exist in the pinned tree — verified
+  by grep during review. It was *added* as CR-005 (http(s)-only, private/loopback/link-local/metadata
+  block, `--` end-of-options on the yt-dlp argv, opt-in local files). Treat that row as a task done, not
+  a property preserved.
 
 ## Open items
-- ☐ Create the GitHub fork (needs your account/org + `gh auth`).
-- ☐ Clone pinned `v1.5.0` (`f65526c…`) into this folder as our working copy.
-- ☐ Execute Phases 1–4.
-- ☐ Decide target org/repo name for the fork.
+- ☑ GitHub fork created / code present on branch `hardening`.
+- ☑ Working copy pinned to `v1.5.0` (`f65526c…`).
+- ☐ Remaining ACTION-PLAN tickets (advisory / lower severity): AR-003 cookie scoping,
+  AR-004 tooling pins + `constraints.txt`, AR-005 `get_status` labelling, AR-007 exa opt-in,
+  AR-008 CI gate + trust-boundary docs. See the advisory follow-ups in `.claude-review/REMEDIATION.md`.
+- ☐ Re-run `/ai-scan .` on the fork to confirm CONDITIONAL→CLEAR once AR-003/004 land.
 
 ## Next steps
-1. Confirm the fork destination (org/name) — then I'll fork, clone the pinned SHA, and start Phase 1
-   (the remote-follow removal is the highest-value change and is mechanical).
-2. Optionally run `/project-kickstart` on this folder once code is in, to scaffold README/CLAUDE.md/CI.
+1. Land the remaining Phase 2–4 ACTION-PLAN tickets (cookie scoping, tooling pins, CI gate).
+2. Re-run `/graph-review` (or `/ai-scan .`) to confirm the verdict improves.
 
 ## Key pointers
 - Upstream: `github.com/Panniantong/agent-reach` · pinned `v1.5.0` = `f65526cbaaad3879473acc1ba6dbefd195caf2be` · MIT.
