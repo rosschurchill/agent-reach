@@ -242,10 +242,6 @@ def _sync_bird_env(auth_token: str, ct0: str) -> None:
         pass
 
 
-# Alias for callers expecting the name _sync_bird_credentials
-_sync_bird_credentials = _sync_bird_env
-
-
 def configure_from_browser(browser: str, config) -> List[Tuple[str, bool, str]]:
     """
     Extract cookies and configure all found platforms.

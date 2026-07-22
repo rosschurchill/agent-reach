@@ -1962,10 +1962,10 @@ def _is_newer_version(remote: str, local: str) -> bool:
         except ValueError:
             return None
 
-    r, l = parse(remote), parse(local)
-    if r is None or l is None:
+    remote_version, local_version = parse(remote), parse(local)
+    if remote_version is None or local_version is None:
         return remote != local  # unparseable — fall back to old behavior
-    return r > l
+    return remote_version > local_version
 
 
 def _cmd_check_update():
