@@ -85,6 +85,54 @@ class TestCLI:
         assert "refusing to write outside" in out
         assert "secret text" in out  # transcript not lost
 
+    @pytest.mark.parametrize("target", ["CLAUDE.md", ".git/hooks/pre-commit", "AGENTS.md"])
+    def test_transcribe_refuses_instruction_and_dotfile_targets(
+        self, capsys, tmp_path, monkeypatch, target
+    ):
+        """CR-010: a poisoned transcript must not be written over agent-instruction
+        files or into dot-dirs (.git hooks, .claude, …)."""
+        monkeypatch.chdir(tmp_path)
+        with patch("agent_reach.transcribe.transcribe", return_value="poison"):
+            with patch("sys.argv", ["agent-reach", "transcribe", "u", "-o", target]):
+                with pytest.raises(SystemExit) as ei:
+                    main()
+        assert ei.value.code != 0
+        assert not (tmp_path / target).exists()
+        assert "refusing" in capsys.readouterr().out
+
+    def test_transcribe_refuses_existing_without_force(self, capsys, tmp_path, monkeypatch):
+        """CR-010: an existing -o target is not clobbered unless --force."""
+        monkeypatch.chdir(tmp_path)
+        (tmp_path / "out.txt").write_text("original", encoding="utf-8")
+        with patch("agent_reach.transcribe.transcribe", return_value="new"):
+            with patch("sys.argv", ["agent-reach", "transcribe", "u", "-o", "out.txt"]):
+                with pytest.raises(SystemExit):
+                    main()
+        assert (tmp_path / "out.txt").read_text(encoding="utf-8") == "original"
+        # With --force it overwrites.
+        with patch("agent_reach.transcribe.transcribe", return_value="new"):
+            with patch("sys.argv", ["agent-reach", "transcribe", "u", "-o", "out.txt", "--force"]):
+                main()
+        assert (tmp_path / "out.txt").read_text(encoding="utf-8").strip() == "new"
+
+    def test_transcribe_local_file_requires_flag(self, capsys, tmp_path, monkeypatch):
+        """REG-2: a local file source is refused unless --allow-local-file, and the
+        flag is actually plumbed through to transcribe()."""
+        monkeypatch.chdir(tmp_path)
+        local = tmp_path / "audio.mp3"
+        local.write_bytes(b"x")
+
+        captured = {}
+
+        def fake_transcribe(source, *, provider="auto", allow_local_file=False, **k):
+            captured["allow_local_file"] = allow_local_file
+            return "text"
+
+        with patch("agent_reach.transcribe.transcribe", side_effect=fake_transcribe):
+            with patch("sys.argv", ["agent-reach", "transcribe", str(local), "--allow-local-file"]):
+                main()
+        assert captured["allow_local_file"] is True
+
     def test_parse_twitter_cookie_input_separate_values(self):
         auth_token, ct0 = cli._parse_twitter_cookie_input("token123 ct0abc")
         assert auth_token == "token123"

@@ -15,6 +15,7 @@ Designed to be importable from channels (e.g. YouTubeChannel.transcribe).
 from __future__ import annotations
 
 import ipaddress
+import os
 import shutil
 import socket
 import subprocess
@@ -95,6 +96,17 @@ def _ip_is_non_public(ip) -> bool:
         or ip.is_reserved
         or ip.is_multicast
         or ip.is_unspecified
+        # Catches CGNAT 100.64.0.0/10 (Tailscale/cloud-internal), 192.0.0.0/24,
+        # 198.18.0.0/15 — all is_private=False but is_global=False (CR-007).
+        or not ip.is_global
+    )
+
+
+def _proxy_configured() -> bool:
+    return any(
+        os.environ.get(v)
+        for v in ("HTTPS_PROXY", "https_proxy", "HTTP_PROXY", "http_proxy",
+                  "ALL_PROXY", "all_proxy")
     )
 
 
@@ -117,6 +129,26 @@ def _assert_safe_public_url(url: str) -> None:
     host = parts.hostname
     if not host:
         raise TranscribeError(f"URL has no host: {url!r}")
+
+    # An explicit host allowlist, when set, is authoritative — the tightest option
+    # and the escape hatch for proxy-only / split-DNS networks (CR-008 / REG-6).
+    allowed = os.environ.get("AGENT_REACH_TRANSCRIBE_ALLOWED_HOSTS", "").strip()
+    if allowed:
+        allow_set = {h.strip().lower() for h in allowed.split(",") if h.strip()}
+        h = host.lower()
+        if any(h == a or h.endswith("." + a) for a in allow_set):
+            return
+        raise TranscribeError(
+            f"host {host!r} not in AGENT_REACH_TRANSCRIBE_ALLOWED_HOSTS"
+        )
+
+    # Behind a proxy, a LOCAL getaddrinfo is meaningless (resolution happens at
+    # the proxy) and split-DNS makes public CDNs resolve to RFC1918 — the IP
+    # pre-check would false-reject valid URLs (REG-6). Rely on the proxy's egress
+    # control; set AGENT_REACH_TRANSCRIBE_ALLOWED_HOSTS for a tighter guard.
+    if _proxy_configured():
+        return
+
     try:
         infos = socket.getaddrinfo(host, None)
     except socket.gaierror as e:
@@ -309,8 +341,15 @@ def transcribe(
         chunks = chunk_audio(compressed, work_dir)
 
     pieces: List[str] = []
-    for chunk in chunks:
-        text = _transcribe_with_fallback(chunk, order, cfg)
+    for i, chunk in enumerate(chunks):
+        try:
+            text = _transcribe_with_fallback(chunk, order, cfg)
+        except TranscribeError as e:
+            # Don't throw away chunks already transcribed (and paid for) — attach
+            # the partial so the caller can surface it with a truncation marker (CR-009).
+            e.partial = "\n".join(p for p in pieces if p)
+            e.failed_chunk = i + 1
+            raise
         pieces.append(text.strip())
     return "\n".join(p for p in pieces if p)
 

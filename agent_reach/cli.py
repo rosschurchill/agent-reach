@@ -126,12 +126,17 @@ def main():
 
     # ── check-update ──
     # ── transcribe ──
-    p_tr = sub.add_parser("transcribe", help="Transcribe a URL or local audio file (Whisper via Groq/OpenAI)")
-    p_tr.add_argument("source", help="Audio/video URL or local file path")
+    p_tr = sub.add_parser("transcribe", help="Transcribe an audio/video URL (Whisper via Groq/OpenAI)")
+    p_tr.add_argument("source", help="Audio/video URL (use --allow-local-file for a local path)")
     p_tr.add_argument("--provider", choices=["auto", "groq", "openai"], default="auto",
                       help="Transcription provider (default: auto = groq → openai fallback)")
     p_tr.add_argument("-o", "--output", default=None,
-                      help="Write transcript to a file instead of stdout")
+                      help="Write transcript to a file (inside the current dir) instead of stdout")
+    p_tr.add_argument("--allow-local-file", action="store_true",
+                      help="Permit a local file path as SOURCE (off by default: URL-only so an "
+                           "agent can't be steered into reading an arbitrary local file)")
+    p_tr.add_argument("--force", action="store_true",
+                      help="With -o, overwrite the destination if it already exists")
 
     sub.add_parser("check-update", help="Check for new versions and changes")
 
@@ -1330,41 +1335,70 @@ def _cmd_configure(args):
         print(f"✅ OpenAI key configured!")
 
 
-def _cmd_transcribe(args):
-    """Transcribe an audio URL via Whisper (Groq → OpenAI fallback).
+def _safe_transcript_dest(output: str, force: bool):
+    """Validate a transcribe -o path. Returns (True, resolved Path) or (False, reason).
 
-    URL-only by design: the download path applies a best-effort public-URL
-    pre-check (not a hard SSRF boundary — yt-dlp re-resolves DNS and follows
-    redirects; see transcribe._assert_safe_public_url) and local file paths are
-    refused here (see transcribe(allow_local_file=...)), so an agent can't be
-    steered into reading an arbitrary local file through this command.
+    Transcript text is attacker-influenceable (the adversary controls the source
+    audio) and the path is agent-chosen, so a poisoned podcast + a crafted -o must
+    not become an arbitrary- or instruction-file write / hook-execution primitive
+    (CR-010).
     """
     from pathlib import Path
 
+    cwd = Path.cwd().resolve()
+    if cwd == Path(cwd.anchor):
+        return False, "refusing -o from the filesystem root"
+    dest = Path(output).resolve()
+    if cwd != dest and cwd not in dest.parents:
+        return False, f"refusing to write outside the current directory: {output}"
+    rel_parts = dest.relative_to(cwd).parts if dest != cwd else ()
+    if any(p.startswith(".") for p in rel_parts):
+        return False, f"refusing to write into a dot-dir/dotfile (.git/.claude/etc.): {output}"
+    if dest.name.lower() in ("claude.md", "agents.md"):
+        return False, f"refusing to overwrite an agent-instruction file: {dest.name}"
+    if dest.exists() and not force:
+        return False, f"{dest} already exists (use --force to overwrite)"
+    return True, dest
+
+
+def _cmd_transcribe(args):
+    """Transcribe an audio/video URL via Whisper (Groq → OpenAI fallback).
+
+    URL-only by default: the download path applies a best-effort public-URL
+    pre-check (not a hard SSRF boundary — yt-dlp re-resolves DNS and follows
+    redirects; see transcribe._assert_safe_public_url). A local file path is
+    refused unless --allow-local-file is passed, so an agent can't be steered
+    into reading an arbitrary local file through this command.
+    """
     from agent_reach.transcribe import TranscribeError, transcribe
 
     try:
-        text = transcribe(args.source, provider=args.provider)
+        text = transcribe(
+            args.source, provider=args.provider,
+            allow_local_file=args.allow_local_file,
+        )
     except TranscribeError as e:
-        print(f"❌ {e}")
+        # Don't discard chunks already transcribed before a mid-run failure (CR-009).
+        partial = getattr(e, "partial", "")
+        if partial:
+            print(partial)
+            print(f"[TRANSCRIPT TRUNCATED: {e}]")
+        else:
+            print(f"❌ {e}")
         sys.exit(1)
 
     if args.output:
-        # Contain the -o sink: the transcript is attacker-influenceable (adversary
-        # controls the source audio) and the path is agent-chosen, so refuse writes
-        # outside the current working directory — otherwise 'transcribe X and save
-        # to ~/.bashrc' becomes an arbitrary-file-write primitive (CR-009).
-        cwd = Path.cwd().resolve()
-        dest = Path(args.output).resolve()
-        if cwd != dest and cwd not in dest.parents:
-            print(f"❌ refusing to write outside the current directory: {args.output}")
-            print(text)  # don't lose the paid transcription
+        ok, dest_or_reason = _safe_transcript_dest(args.output, force=args.force)
+        if not ok:
+            print(f"❌ {dest_or_reason}")
+            print(text)  # never lose the paid transcription
             sys.exit(1)
+        dest = dest_or_reason
         try:
+            dest.parent.mkdir(parents=True, exist_ok=True)
             dest.write_text(text + "\n", encoding="utf-8")
             print(f"✅ Transcript written to {dest}")
         except OSError as e:
-            # Never discard a multi-minute transcription on a write failure.
             print(f"⚠️  could not write {dest} ({e}) — printing transcript instead:")
             print(text)
             sys.exit(1)

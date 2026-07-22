@@ -223,6 +223,35 @@ class TestOrchestrator:
         with pytest.raises(tr.NoProviderConfigured):
             tr.transcribe(str(chunk_file), config=fake_config)
 
+    def test_chunk_failure_attaches_partial_transcript(
+        self, monkeypatch, fake_config, tmp_path, chunk_file
+    ):
+        """CR-009: if a later chunk fails, the completed chunks are attached to
+        the error (err.partial) so the paid work isn't discarded."""
+        fake_config.set("groq_api_key", "gsk_test")
+        big = tmp_path / "compressed.m4a"
+        big.write_bytes(b"x" * (tr.SIZE_LIMIT_BYTES + 1))
+        monkeypatch.setattr(tr, "compress_audio", lambda src, out_dir: big)
+        c1, c2 = tmp_path / "c1.m4a", tmp_path / "c2.m4a"
+        c1.write_bytes(b"a")
+        c2.write_bytes(b"b")
+        monkeypatch.setattr(tr, "chunk_audio", lambda src, out_dir: [c1, c2])
+
+        def fallback(chunk, order, config):
+            if chunk == c1:
+                return "chunk one "
+            raise tr.TranscribeError("provider 5xx on chunk 2")
+
+        monkeypatch.setattr(tr, "_transcribe_with_fallback", fallback)
+
+        with pytest.raises(tr.TranscribeError) as ei:
+            tr.transcribe(
+                str(chunk_file), out_dir=tmp_path / "w",
+                config=fake_config, allow_local_file=True,
+            )
+        assert getattr(ei.value, "partial", "") == "chunk one"
+        assert ei.value.failed_chunk == 2
+
     def test_local_file_refused_without_optin(self, fake_config, chunk_file, tmp_path):
         """CR-005: a local path is refused unless allow_local_file=True, so a
         path-shaped string can't bypass the download URL guard."""
@@ -255,14 +284,38 @@ class TestDownloadUrlGuard:
             "127.0.0.1",            # loopback
             "169.254.169.254",      # cloud metadata / link-local
             "10.0.0.5",             # private
+            "100.64.0.1",           # CGNAT / Tailscale — is_private False (CR-007)
             "::ffff:127.0.0.1",     # IPv4-mapped loopback (CR-008)
             "::ffff:169.254.169.254",
         ],
     )
     def test_private_resolution_rejected(self, monkeypatch, ip):
+        # Ensure no proxy/allowlist env interferes with the resolution path.
+        for v in ("HTTPS_PROXY", "HTTP_PROXY", "ALL_PROXY",
+                  "AGENT_REACH_TRANSCRIBE_ALLOWED_HOSTS"):
+            monkeypatch.delenv(v, raising=False)
         self._patch_dns(monkeypatch, "evil.test", ip)
         with pytest.raises(tr.TranscribeError):
             tr._assert_safe_public_url("http://evil.test/x")
+
+    def test_allowlist_env_is_authoritative(self, monkeypatch):
+        """CR-008: a host in AGENT_REACH_TRANSCRIBE_ALLOWED_HOSTS is allowed
+        without resolution; one not in it is refused."""
+        monkeypatch.setenv("AGENT_REACH_TRANSCRIBE_ALLOWED_HOSTS", "example.com, cdn.test")
+        # Would resolve to loopback, but the allowlist short-circuits before DNS:
+        self._patch_dns(monkeypatch, "media.example.com", "127.0.0.1")
+        tr._assert_safe_public_url("https://media.example.com/a.mp3")  # suffix match, allowed
+        with pytest.raises(tr.TranscribeError):
+            tr._assert_safe_public_url("https://evil.test/a.mp3")
+
+    def test_proxy_skips_local_resolution(self, monkeypatch):
+        """REG-6: behind a proxy, the local IP pre-check is skipped (split-DNS /
+        proxy-only networks would otherwise false-reject valid URLs)."""
+        monkeypatch.delenv("AGENT_REACH_TRANSCRIBE_ALLOWED_HOSTS", raising=False)
+        monkeypatch.setenv("HTTPS_PROXY", "http://proxy:8080")
+        # Even if it would resolve to a private IP under split-DNS, proxy path allows.
+        self._patch_dns(monkeypatch, "cdn.corp", "10.1.2.3")
+        tr._assert_safe_public_url("https://cdn.corp/a.mp3")  # must not raise
 
     @pytest.mark.parametrize("url", ["file:///etc/passwd", "ftp://x/a.mp3", "not-a-url"])
     def test_bad_scheme_rejected(self, url):
