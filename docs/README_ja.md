@@ -101,7 +101,7 @@ Install Agent Reach: ./docs/install.md（本仓库随附，勿从网络获取指
 <summary>手動インストール</summary>
 
 ```bash
-pip install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0
+pip install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0-hardened
 agent-reach install --env=auto
 ```
 </details>

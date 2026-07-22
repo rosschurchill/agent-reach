@@ -37,12 +37,12 @@ If it says "已是最新版本", skip to Step 4 (verify). Otherwise continue.
 ### Step 2: Update Agent Reach package
 
 ```bash
-pip install --upgrade git+https://github.com/rosschurchill/agent-reach.git@v1.5.0
+pip install --upgrade git+https://github.com/rosschurchill/agent-reach.git@v1.5.0-hardened
 ```
 
 > If pip complains about `externally-managed-environment` (PEP 668), the user
 > originally installed via pipx or a venv — use the matching command:
-> `pipx install --force git+https://github.com/rosschurchill/agent-reach.git@v1.5.0`
+> `pipx install --force git+https://github.com/rosschurchill/agent-reach.git@v1.5.0-hardened`
 > or activate `~/.agent-reach-venv` first.
 
 ### Step 3: Refresh upstream tools

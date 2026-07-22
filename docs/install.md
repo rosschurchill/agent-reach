@@ -50,14 +50,14 @@ All Agent Reach files go in dedicated directories — **never in the agent works
 
 ```bash
 # 推荐：pipx（最省心）
-pipx install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0
+pipx install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0-hardened
 agent-reach install --env=auto
 
 # 如果你的 Python 来自 Homebrew / 遇到 PEP 668（externally-managed-environment）
 # 用虚拟环境安装：
 python3 -m venv ~/.agent-reach-venv
 source ~/.agent-reach-venv/bin/activate
-pip install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0
+pip install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0-hardened
 agent-reach install --env=auto
 ```
 
@@ -70,7 +70,7 @@ agent-reach install --env=auto
 > ```powershell
 > py -3 -m venv $env:USERPROFILE\.agent-reach-venv
 > $env:USERPROFILE\.agent-reach-venv\Scripts\Activate.ps1
-> python -m pip install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0
+> python -m pip install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0-hardened
 > agent-reach install --env=auto
 > ```
 

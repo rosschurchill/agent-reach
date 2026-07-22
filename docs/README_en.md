@@ -117,7 +117,7 @@ The Agent auto-installs, detects your environment, and tells you what's ready.
 <summary>Manual install</summary>
 
 ```bash
-pip install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0
+pip install git+https://github.com/rosschurchill/agent-reach.git@v1.5.0-hardened
 agent-reach install --env=auto
 ```
 </details>
