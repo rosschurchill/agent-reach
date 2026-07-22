@@ -1127,12 +1127,14 @@ def _install_mcporter(configure_exa: bool = False):
         try:
             subprocess.run(
                 ["npm", "install", "-g", "mcporter@0.12.0"],
-                capture_output=True, encoding="utf-8", errors="replace", timeout=120,
+                # 300s to match the NodeSource path: a cold global npm install on a
+                # slow mirror routinely exceeds 120s (CR-012).
+                capture_output=True, encoding="utf-8", errors="replace", timeout=300,
             )
             if shutil.which("mcporter"):
                 print("  ✅ mcporter installed")
             else:
-                print("  [X] mcporter install failed. Retry: npm install -g mcporter@0.12.0 (check network/timeout), or try: npx mcporter@0.12.0 list")
+                print("  [X] mcporter install failed (or timed out after 300s). Retry: npm install -g mcporter@0.12.0, or try: npx mcporter@0.12.0 list")
                 return
         except Exception as e:
             print(f"  [X] mcporter install failed: {e}")

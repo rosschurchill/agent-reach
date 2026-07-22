@@ -48,6 +48,7 @@ PLATFORM_SPECS = [
         "cookies": [
             "xq_a_token", "xqat", "xq_r_token", "xq_id_token", "u", "s",
             "bid", "device_id", "acw_tc", "remember", "xq_is_login",
+            "cookiesu",  # REG-7: real xueqiu session cookie, was missing
         ],
         "as_header": True,
         "config_key": "xueqiu",
