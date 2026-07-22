@@ -15,12 +15,12 @@ Status legend: **Done** = fix landed + acceptance command run · **In Progress**
 |----|-----|-------|-------|--------|
 | AR-001 | MED | Remove remote `main`-branch fetch-and-follow; vendor install/update docs | 1 | **Done** (CR-001/002; acceptance grep = 0) |
 | AR-002 | MED | Remove the self-update `check-update` nudge from the skill | 1 | **Done** (CR-001) |
-| AR-003 | MED | Narrow XHS/Xueqiu cookie capture to named tokens | 2 | Not Started |
-| AR-004 | LOW | Align guide docs to the SHA-pinned tooling (rdt-cli); pin mcporter/linkedin-mcp | 2 | Not Started |
-| AR-005 | LOW | Make `get_status` MCP tool side-effect-free (or label it) | 3 | Not Started |
+| AR-003 | MED | Narrow XHS/Xueqiu cookie capture to named tokens | 2 | **Done** (FX-202; live smoke recommended) |
+| AR-004 | LOW | Align guide docs to the SHA-pinned tooling (rdt-cli); pin mcporter/linkedin-mcp | 2 | **Done** (FX-203; `mcporter@0.12.0`, `linkedin-scraper-mcp==4.14.0`) |
+| AR-005 | LOW | Make `get_status` MCP tool side-effect-free (or label it) | 3 | **Done** (FX-204; labelled) |
 | AR-006 | INFO | Pass an allow-listed env to probed child processes | 3 | **Done** (CR-006) |
-| AR-007 | INFO | Make the remote `exa` MCP endpoint opt-in + documented | 3 | Not Started |
-| AR-008 | — | Add our security gate (deps pin check + scan) + document trust boundary | 4 | Not Started |
+| AR-007 | INFO | Make the remote `exa` MCP endpoint opt-in + documented | 3 | **Done** (FX-205; opt-in via `--channels exa`) |
+| AR-008 | — | Add our security gate (deps pin check + scan) + document trust boundary | 4 | **Done** (FX-206; CI pin-guard + trust docs) |
 
 > Also landed beyond the original AR list, via the `/graph-review` remediation: **CR-003** (stop echoing
 > GitHub release-note bodies into agent context), **CR-004** (guard non-JSON HTTP 200 in check-update/watch),
