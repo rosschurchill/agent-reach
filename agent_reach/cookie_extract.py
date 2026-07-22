@@ -23,7 +23,14 @@ PLATFORM_SPECS = [
     {
         "name": "XiaoHongShu",
         "domains": [".xiaohongshu.com"],
-        "cookies": None,  # None = grab all cookies as header string
+        # Named auth/session/anti-bot cookies only (AR-003) — no analytics/ad
+        # cookies that merely share the domain. Emitted as a header string
+        # because xhs tooling consumes a full Cookie header.
+        "cookies": [
+            "web_session", "a1", "webId", "gid", "xsecappid",
+            "websectiga", "sec_poison_id", "acw_tc", "customerClientId",
+        ],
+        "as_header": True,
         "config_key": "xhs",
     },
     {
@@ -35,7 +42,14 @@ PLATFORM_SPECS = [
     {
         "name": "Xueqiu",
         "domains": [".xueqiu.com", "xueqiu.com"],
-        "cookies": None,  # grab all — xq_a_token + session cookies required
+        # Named session tokens + anti-DDoS cookie (AR-003); xq_a_token is the
+        # one the channel checks for. Header string — the channel injects it
+        # into an HTTP cookie jar.
+        "cookies": [
+            "xq_a_token", "xqat", "xq_r_token", "xq_id_token", "u", "s",
+            "bid", "device_id", "acw_tc", "remember", "xq_is_login",
+        ],
+        "as_header": True,
         "config_key": "xueqiu",
     },
 ]
@@ -116,34 +130,28 @@ def extract_all(browser: str = "chrome") -> Dict[str, dict]:
     results = {}
 
     for spec in PLATFORM_SPECS:
-        platform_cookies = {}
-        all_cookies_for_domain = []
+        allow = spec["cookies"]  # named allowlist for every platform (AR-003)
+        as_header = spec.get("as_header", False)
+        matched = []  # (name, value), only allowlisted names on this domain
 
         for cookie in cookie_jar:
-            # Check if cookie belongs to this platform
             domain_match = any(
                 cookie.domain.endswith(d) or cookie.domain == d.lstrip(".")
                 for d in spec["domains"]
             )
             if not domain_match:
                 continue
+            if cookie.name in allow:
+                matched.append((cookie.name, cookie.value))
 
-            all_cookies_for_domain.append(cookie)
-
-            if spec["cookies"] is not None:
-                if cookie.name in spec["cookies"]:
-                    platform_cookies[cookie.name] = cookie.value
-
-        if spec["cookies"] is None:
-            # Grab all as header string
-            if all_cookies_for_domain:
-                cookie_str = "; ".join(
-                    f"{c.name}={c.value}" for c in all_cookies_for_domain
-                )
-                results[spec["config_key"]] = {"cookie_string": cookie_str}
+        if not matched:
+            continue
+        if as_header:
+            # Consumer wants a full Cookie header string (xhs tooling / xueqiu jar).
+            cookie_str = "; ".join(f"{name}={value}" for name, value in matched)
+            results[spec["config_key"]] = {"cookie_string": cookie_str}
         else:
-            if platform_cookies:
-                results[spec["config_key"]] = platform_cookies
+            results[spec["config_key"]] = {name: value for name, value in matched}
 
     return results
 
