@@ -182,3 +182,46 @@ def test_all_warn_falls_back_to_first_warn():
     assert status == "warn"
     assert channel.active_backend == "twitter-cli"
     assert "未认证" in msg
+
+
+class _DictConfig:
+    def __init__(self, data):
+        self._data = data
+
+    def get(self, key, default=None):
+        return self._data.get(key, default)
+
+
+def test_backend_override_is_case_insensitive():
+    """CR-009: TWITTER_BACKEND=opencli (lowercase) matches the 'OpenCLI'
+    candidate and moves it to the front."""
+    channel = TwitterChannel()
+    ordered = channel.ordered_backends(_DictConfig({"twitter_backend": "opencli"}))
+    assert ordered[0] == "OpenCLI"
+    assert channel.override_ignored is None
+
+
+def test_unknown_backend_override_is_recorded_not_applied():
+    """CR-009: an override matching no candidate is ignored but recorded."""
+    channel = TwitterChannel()
+    ordered = channel.ordered_backends(_DictConfig({"twitter_backend": "nonesuch"}))
+    assert ordered == list(TwitterChannel.backends)  # unchanged order
+    assert channel.override_ignored == "nonesuch"
+
+
+def test_check_short_circuits_on_first_ok_backend():
+    """CR-010: once the top-priority backend is 'ok', later backends are not
+    probed at all."""
+    channel = TwitterChannel()
+    with patch.object(
+        TwitterChannel, "_check_twitter_cli", return_value=("ok", "完整可用"),
+    ), patch.object(
+        TwitterChannel, "_check_opencli",
+    ) as opencli_probe, patch.object(
+        TwitterChannel, "_check_bird",
+    ) as bird_probe:
+        status, _ = channel.check()
+    assert status == "ok"
+    assert channel.active_backend == "twitter-cli"
+    opencli_probe.assert_not_called()
+    bird_probe.assert_not_called()

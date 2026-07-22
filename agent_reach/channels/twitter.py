@@ -25,8 +25,18 @@ class TwitterChannel(Channel):
         """
         self.active_backend = None
         findings = []
+        ordered = self.ordered_backends(config)
 
-        for backend in self.ordered_backends(config):
+        def _with_override_notice(status, message):
+            # CR-009: tell the user their backend override matched nothing.
+            if self.override_ignored:
+                message = (
+                    f"{message}\n（后端覆盖 {self.override_ignored} "
+                    "未匹配任何候选，已忽略）"
+                )
+            return status, message
+
+        for backend in ordered:
             if backend == "twitter-cli":
                 result = self._check_twitter_cli()
             elif backend == "OpenCLI":
@@ -39,22 +49,28 @@ class TwitterChannel(Channel):
             if result is None:
                 continue  # 未安装——不参与候选
             findings.append((backend, *result))
+            # CR-010: once the highest-priority usable backend is 'ok', probing
+            # later candidates can't change the winner — stop paying for it.
+            if result[0] == "ok":
+                self.active_backend = backend
+                return _with_override_notice(*result)
 
-        for wanted in ("ok", "warn"):
-            for backend, status, message in findings:
-                if status == wanted:
-                    self.active_backend = backend
-                    return status, message
+        # No 'ok' backend — fall back to the first 'warn' (an unauthenticated
+        # 'warn' must not have masked a later working backend, hence two-pass).
+        for backend, status, message in findings:
+            if status == "warn":
+                self.active_backend = backend
+                return _with_override_notice(status, message)
 
         if findings:  # 只剩 broken/timeout 候选
-            return "error", "\n".join(m for _, _, m in findings)
+            return _with_override_notice("error", "\n".join(m for _, _, m in findings))
 
-        return "warn", (
+        return _with_override_notice("warn", (
             "Twitter CLI 未安装。安装方式：\n"
             "  pipx install twitter-cli\n"
             "或：\n"
             "  uv tool install twitter-cli"
-        )
+        ))
 
     def _check_twitter_cli(self):
         """探测 twitter-cli。返回 None 表示未安装，否则返回 (status, message)。
@@ -63,15 +79,18 @@ class TwitterChannel(Channel):
         未登录时以非零退出码输出 "not_authenticated"——工具本身是活的，
         所以 probe 的 error 状态也要看 output 内容再分类。
         """
+        # retries=0: `twitter status` exits non-zero when unauthenticated — a
+        # steady state, not a transient error — so retrying just doubles a live
+        # x.com call (CR-011).
         probe = probe_command(
-            "twitter", ["status"], timeout=15, retries=1, package="twitter-cli"
+            "twitter", ["status"], timeout=15, retries=0, package="twitter-cli"
         )
         if probe.status == "missing":
             return None
         if probe.status == "broken":
             return "error", "twitter-cli 命令存在但无法执行。\n" + probe.hint
         if probe.status == "timeout":
-            return "error", "twitter-cli 健康检查超时（已重试 1 次）。\n" + probe.hint
+            return "error", "twitter-cli 健康检查超时。\n" + probe.hint
 
         output = probe.output
         if "ok: true" in output:
@@ -133,7 +152,7 @@ class TwitterChannel(Channel):
             output = probe.output
             if probe.ok:
                 return "ok", "bird CLI 可用（读取、搜索推文，含长文/X Article）"
-            if "Missing credentials" in output or "missing" in output.lower():
+            if "Missing credentials" in output:
                 return "warn", (
                     "bird CLI 已安装但未配置认证。设置环境变量：\n"
                     "  export AUTH_TOKEN=\"xxx\"\n"

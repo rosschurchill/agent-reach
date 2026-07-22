@@ -37,6 +37,10 @@ class Channel(ABC):
     #: Backend currently serving this channel; set by check(), None = unavailable.
     active_backend: Optional[str] = None
 
+    #: Set by ordered_backends() to the override value when it matched no
+    #: candidate (so check() can surface "override ignored"); None otherwise.
+    override_ignored: Optional[str] = None
+
     @abstractmethod
     def can_handle(self, url: str) -> bool:
         """Check if this channel can handle this URL."""
@@ -46,16 +50,22 @@ class Channel(ABC):
         """Candidate backends in probe order, honoring the user override.
 
         The config key `<channel>_backend` (env `<CHANNEL>_BACKEND`) moves the
-        named backend to the front of the list; unknown values are ignored so
-        a stale override can never hide working backends.
+        named backend to the front of the list; matching is case-insensitive so
+        `twitter_backend=opencli` matches the "OpenCLI" candidate. Unknown values
+        are ignored (recorded in `override_ignored`) so a stale override can
+        never hide working backends.
         """
         candidates = list(self.backends)
         override = config.get(f"{self.name}_backend") if config else None
+        self.override_ignored = None
         if override:
+            key = override.casefold()
             for i, b in enumerate(candidates):
-                if b == override or b.startswith(override):
+                if b.casefold() == key or b.casefold().startswith(key):
                     candidates.insert(0, candidates.pop(i))
                     break
+            else:
+                self.override_ignored = override
         return candidates
 
     def check(self, config=None) -> Tuple[str, str]:
