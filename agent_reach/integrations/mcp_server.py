@@ -51,11 +51,10 @@ def create_server():
     async def call_tool(name: str, arguments: dict):
         try:
             if name == "get_status":
-                # The tool advertises LIVE diagnostics — force a fresh OpenCLI
-                # probe so a long-running server never serves startup-frozen
-                # state (CR-014).
-                from agent_reach.backends import reset_opencli_status_cache
-                reset_opencli_status_cache()
+                # Freshness comes from the 45s TTL in opencli_status() — do NOT
+                # reset the memo per call: that defeated the TTL and made every
+                # get_status re-spawn ~2 probes per opencli channel (up to ~80s),
+                # a self-inflicted DoS/beacon the memo exists to prevent (CR-006).
                 result = eyes.doctor_report()
             else:
                 result = f"Unknown tool: {name}"
