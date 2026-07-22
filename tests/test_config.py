@@ -102,6 +102,29 @@ class TestConfig:
         assert not list(tmp_path.glob("config.yaml.corrupt*"))
         assert config_file.read_text(encoding="utf-8") == "groq_api_key: gsk_secret\n"
 
+    def test_configure_after_transient_load_refuses_to_wipe(self, tmp_path, monkeypatch):
+        """REG-4: after a transient read failure, set()/save() must REFUSE rather
+        than os.replace() an empty config over the real (unread) credentials."""
+        from agent_reach.config import ConfigError
+
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("groq_api_key: gsk_secret\ntwitter_ct0: c0\n", encoding="utf-8")
+        real_open = open
+
+        def flaky_open(path, *a, **k):
+            if str(path) == str(config_file):
+                raise OSError("EACCES")
+            return real_open(path, *a, **k)
+
+        monkeypatch.setattr("builtins.open", flaky_open)
+        config = Config(config_path=config_file)
+
+        with pytest.raises(ConfigError):
+            config.set("proxy", "http://x")   # would otherwise wipe creds
+
+        # On-disk credentials untouched.
+        assert config_file.read_text(encoding="utf-8") == "groq_api_key: gsk_secret\ntwitter_ct0: c0\n"
+
     def test_save_is_atomic_preserves_perms(self, tmp_config):
         """FX-201: save writes 0o600 and leaves no stray temp files."""
         tmp_config.set("secret_token", "abc123")

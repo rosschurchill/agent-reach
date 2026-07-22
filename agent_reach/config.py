@@ -13,11 +13,19 @@ from typing import Any, Optional
 import yaml
 
 
+class ConfigError(RuntimeError):
+    """Raised when persisting config would risk clobbering unread credentials."""
+
+
 class Config:
     """Manages Agent Reach configuration."""
 
     CONFIG_DIR = Path.home() / ".agent-reach"
     CONFIG_FILE = CONFIG_DIR / "config.yaml"
+
+    #: Set when load() hit a transient read error — save() then refuses to
+    #: overwrite the on-disk file (which still holds the real credentials).
+    _load_unsafe: bool = False
 
     # Feature → required config keys
     FEATURE_REQUIREMENTS = {
@@ -65,13 +73,17 @@ class Config:
             self._quarantine_corrupt(f"unparseable: {e}")
             return
         except OSError as e:
-            # Transient I/O — do NOT touch the file; just proceed with empty data.
+            # Transient I/O (EACCES/EIO/AV-lock): the file exists but we couldn't
+            # read it. Proceed with empty data for read-only commands, but mark the
+            # instance unsafe-to-save so a later set()/configure can't os.replace()
+            # an empty config over the credentials we simply failed to read (REG-4).
             print(
                 f"[!] 暂时无法读取配置（未改动文件）/ config temporarily unreadable "
                 f"(file left intact): {e}",
                 file=sys.stderr,
             )
             self.data = {}
+            self._load_unsafe = True
             return
         # Valid YAML but not a mapping (a bare string / list) would make set() and
         # to_dict() raise on every later call — treat it like a corrupt file (CR-001).
@@ -112,7 +124,18 @@ class Config:
         credentials are never briefly world-readable) then os.replace() onto
         the target — an interrupted write leaves the previous config intact
         instead of a half-truncated file that would fail to parse next load.
+
+        Refuses if this run couldn't read the existing config (transient I/O):
+        overwriting then would replace real credentials with our empty/partial
+        in-memory data (REG-4). The caller should surface the error and retry.
         """
+        if self._load_unsafe:
+            raise ConfigError(
+                "拒绝写入：本次运行无法读取现有配置，覆盖会丢失已保存的凭据。"
+                "请确认 ~/.agent-reach/config.yaml 可读后重试 / refusing to save: this "
+                "run could not read the existing config; overwriting would lose "
+                "stored credentials — fix file access and retry."
+            )
         self._ensure_dir()
         import stat
         import tempfile
