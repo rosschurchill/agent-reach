@@ -551,6 +551,9 @@ def _run_vendored_nodesource_setup() -> bool:
     import subprocess
 
     script = _vendored_nodesource_script_path()
+    # Two-layer check: matches the reviewed-upstream pin AND the scripts manifest.
+    if not _verify_vendored_script("nodesource_setup_22.x.sh"):
+        return False
     try:
         with open(script, "rb") as f:
             data = f.read()
@@ -611,6 +614,53 @@ def _check_nodesource_script_drift(timeout: int = 15) -> int:
     print("    → re-vendor agent_reach/scripts/nodesource_setup_22.x.sh, review the diff,")
     print("      and update _NODESOURCE_SETUP_SHA256.")
     return 1
+
+
+def _scripts_dir() -> str:
+    return os.path.join(os.path.dirname(__file__), "scripts")
+
+
+def _load_script_checksums() -> dict:
+    """Parse scripts/CHECKSUMS.sha256 into {filename: sha256}. Empty if missing."""
+    manifest = os.path.join(_scripts_dir(), "CHECKSUMS.sha256")
+    out = {}
+    try:
+        with open(manifest, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                digest, _, name = line.partition("  ")
+                if digest and name:
+                    out[name.strip()] = digest.strip()
+    except OSError:
+        pass
+    return out
+
+
+def _verify_vendored_script(name: str) -> bool:
+    """True iff scripts/<name> exists and its sha256 matches the manifest pin.
+
+    Tamper/-change tripwire for every executable we ship — refuse to use a script
+    whose bytes don't match the reviewed CHECKSUMS.sha256 entry.
+    """
+    import hashlib
+
+    expected = _load_script_checksums().get(name)
+    if not expected:
+        print(f"  [X] {name}: no reviewed checksum on file — refusing to use it.")
+        return False
+    try:
+        with open(os.path.join(_scripts_dir(), name), "rb") as f:
+            digest = hashlib.sha256(f.read()).hexdigest()
+    except OSError as e:
+        print(f"  [X] {name}: unreadable ({e}).")
+        return False
+    if digest != expected:
+        print(f"  [X] {name}: sha256 mismatch vs manifest — refusing to use it.")
+        print(f"      expected {expected[:16]}…, got {digest[:16]}…")
+        return False
+    return True
 
 
 def _install_system_deps():
@@ -750,9 +800,11 @@ def _install_xiaoyuzhou_deps():
     if os.path.isfile(script_dst):
         print("  ✅ Xiaoyuzhou transcription script already installed")
     else:
-        # Copy script from package
+        # Copy script from package — only after verifying it against the manifest.
         script_src = os.path.join(os.path.dirname(__file__), "scripts", "transcribe_xiaoyuzhou.sh")
-        if os.path.isfile(script_src):
+        if not _verify_vendored_script("transcribe_xiaoyuzhou.sh"):
+            print("  [!]  Skipped: transcription script failed integrity check.")
+        elif os.path.isfile(script_src):
             try:
                 os.makedirs(tools_dir, exist_ok=True)
                 import shutil as _shutil

@@ -92,6 +92,9 @@ jobs:
           assert "agent_reach/skill/SKILL.md" in names, "SKILL.md missing from wheel"
           for prefix in ("agent_reach/guides/", "agent_reach/scripts/", "agent_reach/skill/references/"):
               assert any(n.startswith(prefix) for n in names), f"{prefix} missing from wheel"
+          # The script integrity manifest must ship, or runtime hash-verification
+          # would refuse every vendored script after a real install.
+          assert "agent_reach/scripts/CHECKSUMS.sha256" in names, "CHECKSUMS.sha256 missing from wheel"
           print(f"wheel OK: {len(names)} entries, no duplicates, data files present")
           PY
 
