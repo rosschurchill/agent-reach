@@ -209,6 +209,24 @@ def test_unknown_backend_override_is_recorded_not_applied():
     assert channel.override_ignored == "nonesuch"
 
 
+def test_bird_unknown_auth_wording_still_hints_credentials():
+    """CR-016: if bird's 'Missing credentials' wording changes, the generic
+    fallthrough must still tell the user how to check/set Twitter auth."""
+    channel = TwitterChannel()
+
+    def which_side_effect(name):
+        return "/usr/local/bin/bird" if name == "bird" else None
+
+    with patch("shutil.which", side_effect=which_side_effect), patch(
+        "subprocess.run",
+        return_value=_cp(stderr="some NEW upstream auth error wording\n", returncode=1),
+    ):
+        status, message = channel.check()
+    assert status == "warn"
+    # Fallthrough message names the credentials / how to check.
+    assert "AUTH_TOKEN" in message or "bird check" in message
+
+
 def test_check_short_circuits_on_first_ok_backend():
     """CR-010: once the top-priority backend is 'ok', later backends are not
     probed at all."""

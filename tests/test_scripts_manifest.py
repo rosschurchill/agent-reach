@@ -58,6 +58,19 @@ def test_nodesource_constant_agrees_with_manifest():
     assert _parse_manifest()["nodesource_setup_22.x.sh"] == cli._NODESOURCE_SETUP_SHA256
 
 
+def test_in_code_pins_agree_with_manifest():
+    """Manifest is the single source of truth; every in-code _SCRIPT_PINS anchor
+    must match it. On mismatch the message shows the value to paste into cli.py —
+    so maintaining a hash means: regenerate the manifest, run this test, update the
+    named constant to what it prints."""
+    pinned = _parse_manifest()
+    for name, in_code in cli._SCRIPT_PINS.items():
+        assert name in pinned, f"{name} pinned in code but absent from CHECKSUMS.sha256"
+        assert in_code == pinned[name], (
+            f"in-code pin for {name} is stale — update it in cli.py to: {pinned[name]}"
+        )
+
+
 def test_verify_helper_rejects_unknown_and_accepts_known():
     assert cli._verify_vendored_script("transcribe_xiaoyuzhou.sh") is True
     assert cli._verify_vendored_script("does-not-exist.sh") is False

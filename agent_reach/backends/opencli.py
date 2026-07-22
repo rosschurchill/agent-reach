@@ -16,9 +16,9 @@ Probing notes (verified live):
     we check Chrome's Extensions directory on disk to disambiguate.
 """
 
-import functools
 import glob
 import os
+import time
 from dataclasses import dataclass
 
 from agent_reach.probe import probe_command
@@ -88,29 +88,39 @@ class OpenCLIStatus:
         )
 
 
+#: Memo TTL: short enough that a long-running MCP server's get_status re-probes
+#: OpenCLI's live daemon/extension state (CR-014 — the tool advertises "live
+#: diagnostics, not a cached read"), long enough that the 4 channels within a
+#: single doctor/install run still share one probe.
+_STATUS_TTL_SECONDS = 45
+_status_memo: dict = {"value": None, "at": 0.0}
+
+
 def opencli_status(timeout: int = 10) -> OpenCLIStatus:
     """Probe OpenCLI install + daemon/extension state without side effects.
 
-    Memoized per process for the default timeout: opencli_status() is called
+    Memoized with a short TTL for the default timeout: opencli_status() is called
     independently by four channels (twitter, reddit, xiaohongshu, bilibili) on
     every doctor/install run, each call spawning two 10s-timeout subprocesses —
-    without caching a wedged daemon socket could stall doctor up to ~80s. Call
-    reset_opencli_status_cache() in tests (or to force a re-probe). A non-default
-    timeout bypasses the cache.
+    without caching a wedged daemon socket could stall doctor up to ~80s. The TTL
+    (_STATUS_TTL_SECONDS) means a long-running MCP server re-probes rather than
+    serving state frozen at startup. Call reset_opencli_status_cache() to force an
+    immediate re-probe. A non-default timeout bypasses the memo.
     """
-    if timeout == 10:
-        return _cached_opencli_status()
-    return _probe_opencli_status(timeout)
-
-
-@functools.lru_cache(maxsize=1)
-def _cached_opencli_status() -> OpenCLIStatus:
-    return _probe_opencli_status(10)
+    if timeout != 10:
+        return _probe_opencli_status(timeout)
+    now = time.monotonic()
+    cached = _status_memo["value"]
+    if cached is None or (now - _status_memo["at"]) > _STATUS_TTL_SECONDS:
+        _status_memo["value"] = _probe_opencli_status(10)
+        _status_memo["at"] = now
+    return _status_memo["value"]
 
 
 def reset_opencli_status_cache() -> None:
-    """Clear the per-process opencli_status() memo (tests / forced re-probe)."""
-    _cached_opencli_status.cache_clear()
+    """Clear the opencli_status() memo (tests / forced live re-probe)."""
+    _status_memo["value"] = None
+    _status_memo["at"] = 0.0
 
 
 def _probe_opencli_status(timeout: int = 10) -> OpenCLIStatus:

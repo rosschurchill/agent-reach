@@ -128,6 +128,33 @@ def test_status_is_memoized_per_process():
     reset_opencli_status_cache()
 
 
+def test_status_memo_expires_after_ttl():
+    """CR-014: the memo re-probes after its TTL so a long-running MCP server's
+    get_status isn't frozen at startup, but reuses the probe within the TTL."""
+    from agent_reach.backends import opencli
+
+    reset_opencli_status_cache()
+    calls = []
+
+    def fake_probe(cmd, args=("--version",), **kwargs):
+        calls.append(list(args))
+        return ProbeResult("missing")
+
+    clock = {"t": 1000.0}
+    with patch.object(opencli, "probe_command", side_effect=fake_probe), \
+         patch.object(opencli.time, "monotonic", lambda: clock["t"]):
+        opencli.opencli_status()          # probe #1
+        opencli.opencli_status()          # within TTL → cached
+        n_before = len([c for c in calls if c == ["--version"]])
+        clock["t"] += opencli._STATUS_TTL_SECONDS + 1
+        opencli.opencli_status()          # past TTL → re-probe
+        n_after = len([c for c in calls if c == ["--version"]])
+
+    assert n_before == 1          # second call was cached
+    assert n_after == 2           # re-probed after TTL
+    reset_opencli_status_cache()
+
+
 def test_chrome_profile_roots_cover_edge_brave_chromium():
     """CR-008: extension detection must look beyond Google Chrome."""
     from agent_reach.backends import opencli

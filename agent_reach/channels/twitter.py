@@ -152,6 +152,11 @@ class TwitterChannel(Channel):
             output = probe.output
             if probe.ok:
                 return "ok", "bird CLI 可用（读取、搜索推文，含长文/X Article）"
+            # Exact upstream marker as of @steipete/bird ~2026-07 (`bird check`
+            # prints "Missing credentials" when unauthenticated). CR-016: if that
+            # wording changes upstream, we fall through to the generic warn below
+            # — which still tells the user how to set AUTH_TOKEN/CT0 — rather than
+            # reverting to the old over-broad substring match. A test guards it.
             if "Missing credentials" in output:
                 return "warn", (
                     "bird CLI 已安装但未配置认证。设置环境变量：\n"
@@ -159,6 +164,6 @@ class TwitterChannel(Channel):
                     "  export CT0=\"yyy\""
                 )
             return "warn", (
-                "bird CLI 已安装但认证检查失败。"
+                "bird CLI 已安装但认证检查失败。设置 AUTH_TOKEN/CT0 或运行 `bird check` 查看详情。"
             )
         return last_failure

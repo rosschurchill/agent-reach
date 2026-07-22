@@ -51,6 +51,11 @@ def create_server():
     async def call_tool(name: str, arguments: dict):
         try:
             if name == "get_status":
+                # The tool advertises LIVE diagnostics — force a fresh OpenCLI
+                # probe so a long-running server never serves startup-frozen
+                # state (CR-014).
+                from agent_reach.backends import reset_opencli_status_cache
+                reset_opencli_status_cache()
                 result = eyes.doctor_report()
             else:
                 result = f"Unknown tool: {name}"

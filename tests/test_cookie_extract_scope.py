@@ -59,3 +59,13 @@ def test_twitter_named_dict_path_unchanged(mixed_jar):
 def test_no_grab_all_none_spec_remains():
     for spec in cookie_extract.PLATFORM_SPECS:
         assert spec["cookies"] is not None, f"{spec['name']} still grabs all cookies"
+
+
+def test_dropped_cookie_names_are_logged_without_values(mixed_jar, capsys):
+    """CR-015: excluded same-domain cookie NAMES are surfaced (for diagnosability),
+    but their VALUES never are."""
+    cookie_extract.extract_all("chrome")
+    err = capsys.readouterr().err
+    assert "_ga" in err          # dropped XHS analytics name surfaced
+    assert "Hm_lvt_9" in err     # dropped Xueqiu analytics name surfaced
+    assert "TRACK" not in err     # the value must NOT appear

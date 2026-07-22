@@ -9,7 +9,7 @@ Usage:
 """
 
 import sys
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Tuple
 
 
 # Platform cookie specs: (platform_name, domain_pattern, needed_cookies)
@@ -133,6 +133,7 @@ def extract_all(browser: str = "chrome") -> Dict[str, dict]:
         allow = spec["cookies"]  # named allowlist for every platform (AR-003)
         as_header = spec.get("as_header", False)
         matched = []  # (name, value), only allowlisted names on this domain
+        excluded = []  # NAMES ONLY of same-domain cookies dropped by the allowlist
 
         for cookie in cookie_jar:
             domain_match = any(
@@ -143,6 +144,20 @@ def extract_all(browser: str = "chrome") -> Dict[str, dict]:
                 continue
             if cookie.name in allow:
                 matched.append((cookie.name, cookie.value))
+            else:
+                excluded.append(cookie.name)
+
+        # Observability (CR-015): the allowlists include anti-bot cookies that
+        # platforms rotate; when a required name changes upstream we'd silently
+        # emit a partial header. Surface the dropped NAMES (never values) so a
+        # later auth failure is diagnosable. See each allowlist's comment for the
+        # upstream tool's required-cookie set.
+        if excluded:
+            print(
+                f"  [i] {spec['name']}: kept {len(matched)} allowlisted cookie(s), "
+                f"dropped {len(excluded)} same-domain: {', '.join(sorted(set(excluded)))}",
+                file=sys.stderr,
+            )
 
         if not matched:
             continue

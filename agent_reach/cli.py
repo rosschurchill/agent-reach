@@ -639,6 +639,12 @@ def _scripts_dir() -> str:
 #: alone is only drift-detection — an attacker who can rewrite a script can rewrite
 #: the manifest in the same operation — so executed scripts are ALSO pinned here in
 #: reviewed code (CR-013). Verification must satisfy both the manifest and this pin.
+#:
+#: MAINTENANCE — CHECKSUMS.sha256 is the single source of truth. When a script
+#: changes intentionally, regenerate it:
+#:     (cd agent_reach/scripts && sha256sum *.sh > CHECKSUMS.sha256)
+#: then run `pytest tests/test_scripts_manifest.py` — it re-checks these in-code
+#: pins against the manifest and, on mismatch, prints the exact value to paste here.
 _SCRIPT_PINS = {
     "nodesource_setup_22.x.sh": _NODESOURCE_SETUP_SHA256,
     "transcribe_xiaoyuzhou.sh": (
