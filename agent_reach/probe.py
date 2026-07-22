@@ -16,7 +16,7 @@ not just file existence.
 import shutil
 import subprocess
 from dataclasses import dataclass
-from typing import Optional, Sequence
+from typing import Mapping, Optional, Sequence
 
 from agent_reach.utils.process import utf8_subprocess_env
 
@@ -50,6 +50,7 @@ def probe_command(
     timeout: int = 10,
     retries: int = 0,
     package: Optional[str] = None,
+    extra_env: Optional[Mapping[str, str]] = None,
 ) -> ProbeResult:
     """Actually execute `cmd *args` and classify the result.
 
@@ -59,6 +60,9 @@ def probe_command(
 
     package: pip/pipx package name used in the broken-install hint
              (defaults to cmd).
+    extra_env: variables (e.g. this tool's OWN credentials) overlaid on the
+             creds-free default env. Pass secrets ONLY to the probe that reads
+             them — the default env goes to every probed CLI (CR-004).
     """
     path = shutil.which(cmd)
     if not path:
@@ -66,7 +70,7 @@ def probe_command(
 
     last: Optional[ProbeResult] = None
     for _ in range(retries + 1):
-        last = _run_once(path, args, timeout, package or cmd)
+        last = _run_once(path, args, timeout, package or cmd, extra_env)
         if last.ok:
             return last
         # missing/broken won't heal between retries — only transient
@@ -76,7 +80,16 @@ def probe_command(
     return last
 
 
-def _run_once(path: str, args: Sequence[str], timeout: int, package: str) -> ProbeResult:
+def _run_once(
+    path: str,
+    args: Sequence[str],
+    timeout: int,
+    package: str,
+    extra_env: Optional[Mapping[str, str]] = None,
+) -> ProbeResult:
+    env = utf8_subprocess_env()
+    if extra_env:
+        env.update(extra_env)  # this probe's OWN creds, overlaid on the creds-free default
     try:
         r = subprocess.run(
             [path, *args],
@@ -84,7 +97,7 @@ def _run_once(path: str, args: Sequence[str], timeout: int, package: str) -> Pro
             encoding="utf-8",
             errors="replace",
             timeout=timeout,
-            env=utf8_subprocess_env(),
+            env=env,
         )
     except FileNotFoundError:
         # which() found it but exec failed: the shebang interpreter is gone

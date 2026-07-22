@@ -27,12 +27,14 @@ _ENV_ALLOWLIST = (
     # TLS trust roots — a custom CA bundle must reach the child or HTTPS probes
     # fail with cert errors that read as auth failures.
     "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "NODE_EXTRA_CA_CERTS",
-    # XDG dirs — some CLIs read their config/creds from here.
-    "XDG_CONFIG_HOME", "XDG_DATA_HOME",
+    # XDG dirs — some CLIs read their config/creds/state from here.
+    "XDG_CONFIG_HOME", "XDG_DATA_HOME", "XDG_STATE_HOME", "XDG_CACHE_HOME",
     # Agent Reach's own toggle.
     "AGENT_REACH_LANG",
-    # Credentials the probed CLIs themselves read from the environment.
-    "TWITTER_AUTH_TOKEN", "TWITTER_CT0", "AUTH_TOKEN", "CT0", "GROQ_API_KEY",
+    # NOTE: credentials are deliberately NOT here. The default env is handed to
+    # EVERY probed third-party CLI, so a token in this list would leak to opencli/
+    # yt-dlp/mcporter/etc. on an unrelated probe (CR-004). Each secret is injected
+    # only at the probe that owns it, via probe_command(extra_env=...).
 )
 
 
@@ -51,6 +53,16 @@ def utf8_subprocess_env(base: Mapping[str, str] | None = None) -> dict[str, str]
         env = dict(base)
     env.update(UTF8_ENV)
     return env
+
+
+def creds_from_env(*names: str) -> dict[str, str]:
+    """Pick just these variables out of os.environ (skipping unset ones).
+
+    Use at a probe call site to hand a tool ONLY its own credentials via
+    probe_command(extra_env=...), instead of putting secrets in the shared
+    default allowlist where they'd reach every probed CLI (CR-004).
+    """
+    return {n: os.environ[n] for n in names if n in os.environ}
 
 
 def mcporter_utf8_env_args() -> list[str]:

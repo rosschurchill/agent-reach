@@ -2,6 +2,7 @@
 """GitHub — check if gh CLI is available."""
 
 from agent_reach.probe import probe_command
+from agent_reach.utils.process import creds_from_env
 
 from .base import Channel
 
@@ -18,7 +19,13 @@ class GitHubChannel(Channel):
 
     def check(self, config=None):
         # 真跑 gh auth status 探活。注意：未登录时 rc!=0 是正常业务态（warn），不是 error。
-        probe = probe_command("gh", ["auth", "status"], timeout=10, package="gh")
+        # Headless/CI users authenticate gh via GH_TOKEN/GITHUB_TOKEN — pass them
+        # to this probe (only) so doctor doesn't misreport token auth as
+        # "unauthenticated" (REG-5). Scoped per-probe, not the shared env (CR-004).
+        probe = probe_command(
+            "gh", ["auth", "status"], timeout=10, package="gh",
+            extra_env=creds_from_env("GH_TOKEN", "GITHUB_TOKEN", "GH_HOST"),
+        )
         if probe.status == "missing":
             self.active_backend = None
             return "warn", "gh CLI 未安装。安装：https://cli.github.com"

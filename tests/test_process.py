@@ -11,17 +11,32 @@ def test_utf8_subprocess_env_forces_python_utf8():
 
 def test_default_env_is_allowlisted_not_full_clone(monkeypatch):
     """CR-006: with no base, an exported secret must NOT reach the child env,
-    while allowlisted vars (PATH + creds the CLIs read) pass through."""
+    while allowlisted system vars pass through."""
     monkeypatch.setenv("MY_UNRELATED_SECRET", "leak-me")
     monkeypatch.setenv("PATH", "/usr/bin")
-    monkeypatch.setenv("GROQ_API_KEY", "gsk_test")
 
     env = utf8_subprocess_env()
 
     assert "MY_UNRELATED_SECRET" not in env
     assert env["PATH"] == "/usr/bin"
-    assert env["GROQ_API_KEY"] == "gsk_test"
     assert env["PYTHONUTF8"] == "1"
+
+
+def test_credentials_not_in_default_env(monkeypatch):
+    """CR-004: credentials must NOT be in the shared default env — they'd reach
+    every probed CLI. They're injected per-probe via extra_env instead."""
+    from agent_reach.utils.process import creds_from_env
+
+    for name in ("GROQ_API_KEY", "TWITTER_AUTH_TOKEN", "TWITTER_CT0",
+                 "AUTH_TOKEN", "CT0", "GH_TOKEN", "GITHUB_TOKEN"):
+        monkeypatch.setenv(name, "secret")
+    env = utf8_subprocess_env()
+    for name in ("GROQ_API_KEY", "TWITTER_AUTH_TOKEN", "TWITTER_CT0",
+                 "AUTH_TOKEN", "CT0", "GH_TOKEN", "GITHUB_TOKEN"):
+        assert name not in env, f"{name} leaked into the shared default env"
+    # creds_from_env picks only the requested, set ones.
+    picked = creds_from_env("GH_TOKEN", "NOT_SET_VAR")
+    assert picked == {"GH_TOKEN": "secret"}
 
 
 def test_default_env_preserves_proxy_and_ca(monkeypatch):

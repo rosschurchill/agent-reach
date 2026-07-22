@@ -3,6 +3,7 @@
 
 from .base import Channel
 from agent_reach.probe import probe_command
+from agent_reach.utils.process import creds_from_env
 
 
 class TwitterChannel(Channel):
@@ -83,7 +84,11 @@ class TwitterChannel(Channel):
         # steady state, not a transient error — so retrying just doubles a live
         # x.com call (CR-011).
         probe = probe_command(
-            "twitter", ["status"], timeout=15, retries=0, package="twitter-cli"
+            "twitter", ["status"], timeout=15, retries=0, package="twitter-cli",
+            # Hand twitter-cli ONLY its own creds — not the shared env (CR-004).
+            extra_env=creds_from_env(
+                "TWITTER_AUTH_TOKEN", "TWITTER_CT0", "AUTH_TOKEN", "CT0"
+            ),
         )
         if probe.status == "missing":
             return None
@@ -131,7 +136,8 @@ class TwitterChannel(Channel):
         last_failure = None
         for cmd in ("bird", "birdx"):
             probe = probe_command(
-                cmd, ["check"], timeout=15, retries=1, package="@steipete/bird"
+                cmd, ["check"], timeout=15, retries=1, package="@steipete/bird",
+                extra_env=creds_from_env("AUTH_TOKEN", "CT0"),  # bird's own creds only
             )
             if probe.status == "missing":
                 continue
