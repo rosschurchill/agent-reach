@@ -16,6 +16,7 @@ Probing notes (verified live):
     we check Chrome's Extensions directory on disk to disambiguate.
 """
 
+import functools
 import glob
 import os
 from dataclasses import dataclass
@@ -30,10 +31,14 @@ OPENCLI_EXTENSION_URL = (
 
 #: Chrome-family profile roots that contain <Profile>/Extensions/<id>/
 _CHROME_PROFILE_ROOTS = (
-    "~/Library/Application Support/Google/Chrome",  # macOS Chrome
-    "~/Library/Application Support/Chromium",       # macOS Chromium
-    "~/.config/google-chrome",                      # Linux Chrome
-    "~/.config/chromium",                           # Linux Chromium
+    "~/Library/Application Support/Google/Chrome",                # macOS Chrome
+    "~/Library/Application Support/Chromium",                     # macOS Chromium
+    "~/Library/Application Support/Microsoft Edge",               # macOS Edge
+    "~/Library/Application Support/BraveSoftware/Brave-Browser",  # macOS Brave
+    "~/.config/google-chrome",                                    # Linux Chrome
+    "~/.config/chromium",                                         # Linux Chromium
+    "~/.config/microsoft-edge",                                   # Linux Edge
+    "~/.config/BraveSoftware/Brave-Browser",                      # Linux Brave
 )
 
 
@@ -48,7 +53,13 @@ def _extension_installed_on_disk() -> bool:
     roots = [os.path.expanduser(p) for p in _CHROME_PROFILE_ROOTS]
     local_app_data = os.environ.get("LOCALAPPDATA")
     if local_app_data:  # Windows
-        roots.append(os.path.join(local_app_data, "Google", "Chrome", "User Data"))
+        for parts in (
+            ("Google", "Chrome", "User Data"),
+            ("Microsoft", "Edge", "User Data"),
+            ("Chromium", "User Data"),
+            ("BraveSoftware", "Brave-Browser", "User Data"),
+        ):
+            roots.append(os.path.join(local_app_data, *parts))
     for root in roots:
         if glob.glob(os.path.join(root, "*", "Extensions", OPENCLI_EXTENSION_ID)):
             return True
@@ -78,6 +89,31 @@ class OpenCLIStatus:
 
 
 def opencli_status(timeout: int = 10) -> OpenCLIStatus:
+    """Probe OpenCLI install + daemon/extension state without side effects.
+
+    Memoized per process for the default timeout: opencli_status() is called
+    independently by four channels (twitter, reddit, xiaohongshu, bilibili) on
+    every doctor/install run, each call spawning two 10s-timeout subprocesses —
+    without caching a wedged daemon socket could stall doctor up to ~80s. Call
+    reset_opencli_status_cache() in tests (or to force a re-probe). A non-default
+    timeout bypasses the cache.
+    """
+    if timeout == 10:
+        return _cached_opencli_status()
+    return _probe_opencli_status(timeout)
+
+
+@functools.lru_cache(maxsize=1)
+def _cached_opencli_status() -> OpenCLIStatus:
+    return _probe_opencli_status(10)
+
+
+def reset_opencli_status_cache() -> None:
+    """Clear the per-process opencli_status() memo (tests / forced re-probe)."""
+    _cached_opencli_status.cache_clear()
+
+
+def _probe_opencli_status(timeout: int = 10) -> OpenCLIStatus:
     """Probe OpenCLI install + daemon/extension state without side effects."""
     version_probe = probe_command(
         "opencli", ["--version"], timeout=timeout, package=OPENCLI_PACKAGE

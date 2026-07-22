@@ -3,7 +3,11 @@
 
 from unittest.mock import patch
 
-from agent_reach.backends import opencli_status, opencli_summary
+from agent_reach.backends import (
+    opencli_status,
+    opencli_summary,
+    reset_opencli_status_cache,
+)
 from agent_reach.probe import ProbeResult
 
 
@@ -17,6 +21,8 @@ def _status_with(version_probe, daemon_probe=None, ext_on_disk=False):
             return version_probe
         return daemon_probe or ProbeResult("missing")
 
+    # Per-process memo (CR-007) must not leak between tests — force a re-probe.
+    reset_opencli_status_cache()
     with patch("agent_reach.backends.opencli.probe_command", side_effect=fake_probe), \
          patch(
              "agent_reach.backends.opencli._extension_installed_on_disk",
@@ -98,3 +104,35 @@ def test_probe_uses_daemon_status_not_doctor():
     )
     assert ["daemon", "status"] in calls
     assert ["doctor"] not in calls
+
+
+def test_status_is_memoized_per_process():
+    """CR-007: repeated default-timeout calls return the cached instance and do
+    not re-probe, until the cache is cleared."""
+    from agent_reach.backends import opencli
+    from agent_reach.backends import opencli_status as status
+
+    reset_opencli_status_cache()
+    calls = []
+
+    def fake_probe(cmd, args=("--version",), **kwargs):
+        calls.append(list(args))
+        return ProbeResult("missing")
+
+    with patch.object(opencli, "probe_command", side_effect=fake_probe):
+        a = status()
+        b = status()
+
+    assert a is b  # same cached object
+    assert calls == [["--version"]]  # probed exactly once, not twice
+    reset_opencli_status_cache()
+
+
+def test_chrome_profile_roots_cover_edge_brave_chromium():
+    """CR-008: extension detection must look beyond Google Chrome."""
+    from agent_reach.backends import opencli
+
+    assert len(opencli._CHROME_PROFILE_ROOTS) >= 8
+    joined = " ".join(opencli._CHROME_PROFILE_ROOTS).lower()
+    assert "edge" in joined
+    assert "brave" in joined

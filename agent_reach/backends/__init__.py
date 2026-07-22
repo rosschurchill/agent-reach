@@ -13,4 +13,5 @@ from .opencli import (  # noqa: F401
     OpenCLIStatus,
     opencli_status,
     opencli_summary,
+    reset_opencli_status_cache,
 )
