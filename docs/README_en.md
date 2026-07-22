@@ -249,6 +249,18 @@ Each channel file **actually probes** its candidate backends in order (not just 
 
 ---
 
+## Trust boundary & data egress (this fork)
+
+This repo is a **hardened fork** of upstream `Panniantong/agent-reach` with an explicit trust model:
+
+- **Pinned fork, never upstream `main`.** We track a reviewed commit (`v1.5.0` = `f65526c…`); an upgrade is a reviewed SHA bump, not a runtime fetch. The skill/CLI no longer fetch `main/docs/*` over the network and follow it at agent-runtime.
+- **External tooling is version-pinned:** `mcporter@0.12.0`, `linkedin-scraper-mcp==4.14.0`, `rdt-cli @5e4fb37…` (see `constraints.txt`).
+- **Third-party data egress you should know about:**
+  - **Exa web search** → `https://mcp.exa.ai/mcp`: **off by default**, configured only via `agent-reach install --channels exa` (your queries go to Exa).
+  - **Web page reads (Jina Reader)** → `https://r.jina.ai/URL` when the agent reads an arbitrary page.
+  - **Availability probes**: `doctor` and the MCP `get_status` tool make live requests to platforms (x.com, xueqiu.com, …) to determine status.
+  - All other reads are the agent calling the upstream tool directly; egress goes to that platform.
+
 ## Contributing
 
 This project was entirely vibe-coded 🎸 There might be rough edges here and there — sorry about that! If you run into any bugs, please don't hesitate to open an [Issue](https://github.com/Panniantong/agent-reach/issues) and I'll fix it ASAP.

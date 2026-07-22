@@ -214,6 +214,18 @@ Agent Reach 在设计上重视安全：
 | 🔍 **Dry Run** | `agent-reach install --dry-run` 预览所有操作，不做任何改动 |
 | 🧩 **可插拔架构** | 不信任某个组件？换掉对应的 channel 文件即可，不影响其他 |
 
+### 🛰️ 信任边界与数据出网（本 fork）
+
+本仓库是上游 `Panniantong/agent-reach` 的**加固 fork**，信任模型明确：
+
+- **固定 fork，绝不跟随上游 `main`。** 我们锁定在已审查的提交（`v1.5.0` = `f65526c…`）；升级 = 一次经过审查的 SHA bump，不是运行时从网络拉取指令。skill/CLI 不再在运行时 `fetch` 远端 `main/docs/*` 并执行。
+- **外部工具全部固定版本。** `mcporter@0.12.0`、`linkedin-scraper-mcp==4.14.0`、`rdt-cli @5e4fb37…`（见 `constraints.txt`）。
+- **第三方数据出网（你应知道）：**
+  - **Exa 全网搜索** → `https://mcp.exa.ai/mcp`：**默认不启用**，仅在 `agent-reach install --channels exa` 时才配置（查询会发往 Exa）。
+  - **网页读取（Jina Reader）** → `https://r.jina.ai/URL`：当 agent 读取任意网页时发往 Jina。
+  - **各平台健康探测**：`doctor` / MCP `get_status` 会对 x.com、xueqiu.com 等发起实时探测请求。
+  - 其余读取由 agent 直接调用上游工具完成，出网目标即该平台自身。
+
 ### 🍪 Cookie 安全建议
 
 > ⚠️ **封号风险提醒：** 使用 Cookie 登录的平台（Twitter、小红书等），通过脚本/API 调用**存在被平台检测并封号的风险**。请务必使用**专用小号**，不要用你的主账号。

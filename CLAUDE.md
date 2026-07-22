@@ -42,3 +42,10 @@ Repo: github.com/Panniantong/Agent-Reach | License: MIT | Version: 1.5.0
 - Run `pytest tests/ -v` before committing — all tests must pass
 - Cookie-based auth (Twitter, XHS): use Cookie-Editor export method only, no QR scan
 - XHS login: Cookie-Editor browser export only (QR will hang)
+
+## Trust boundary & data egress
+- This is a **hardened fork** of `Panniantong/agent-reach`, pinned to a reviewed commit (`v1.5.0` = `f65526c…`). We **never track upstream `main`** — upgrades are a reviewed SHA bump, not a runtime fetch.
+- The skill/CLI must **never** fetch setup/upgrade instructions from a network URL at agent-runtime; reference the vendored `docs/install.md` / `docs/update.md` instead.
+- External runtime tools are **version-pinned** and recorded in `constraints.txt`: `mcporter@0.12.0`, `linkedin-scraper-mcp==4.14.0`, `rdt-cli @5e4fb37…`. New pins must be exact and ≥30 days old (`/pin-check`).
+- **Third-party egress** (keep documented, don't silently add more): Exa search `mcp.exa.ai` (opt-in via `--channels exa` only), web reads `r.jina.ai`, and live availability probes to each platform from `doctor` / MCP `get_status`.
+- Credentials stay local (`~/.agent-reach/config.yaml`, 0o600, atomic writes); cookie capture is limited to named auth/session tokens per platform.

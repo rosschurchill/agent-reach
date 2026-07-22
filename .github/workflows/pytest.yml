@@ -25,9 +25,42 @@ jobs:
           python -m pip install --upgrade pip
           pip install -c constraints.txt -e .[dev]
 
+      - name: Verify dependency set is consistent (pins honored)
+        run: |
+          pip check
+
       - name: Run tests
         run: |
           pytest -q
+
+  # Guard the supply-chain trust boundary: every external tool install string in
+  # code/docs must carry an exact version/SHA (mcporter@x, linkedin-scraper-mcp==x,
+  # rdt-cli.git@<sha>). A bare `npm install -g mcporter` etc. fails this job.
+  pin-guard:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Assert external install strings are pinned
+        run: |
+          python - <<'PY'
+          import re, sys, pathlib
+          bad = []
+          for p in list(pathlib.Path("agent_reach").rglob("*.py")) + \
+                   list(pathlib.Path("agent_reach").rglob("*.md")):
+              t = p.read_text(encoding="utf-8")
+              for i, line in enumerate(t.splitlines(), 1):
+                  if re.search(r"npm install -g mcporter(?!@)", line):
+                      bad.append(f"{p}:{i}: unpinned mcporter — {line.strip()}")
+                  if re.search(r"pip install +linkedin-scraper-mcp(?!==)", line):
+                      bad.append(f"{p}:{i}: unpinned linkedin-scraper-mcp — {line.strip()}")
+                  if "rdt-cli.git'" in line and "@5e4fb37" not in line:
+                      bad.append(f"{p}:{i}: unpinned rdt-cli — {line.strip()}")
+          if bad:
+              print("\n".join(bad)); sys.exit(1)
+          print("pin-guard OK: all external install strings pinned")
+          PY
 
   # Editable installs (-e) never exercise wheel packaging, so a broken wheel
   # can pass tests and still fail every real `pip install` from source.
