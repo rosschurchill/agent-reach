@@ -24,6 +24,22 @@ def test_default_env_is_allowlisted_not_full_clone(monkeypatch):
     assert env["PYTHONUTF8"] == "1"
 
 
+def test_default_env_preserves_proxy_and_ca(monkeypatch):
+    """CR-004: proxy + CA-bundle vars must reach probed children, or doctor runs
+    proxyless on restricted networks and reports false timeouts."""
+    monkeypatch.setenv("HTTP_PROXY", "http://p:8080")
+    monkeypatch.setenv("HTTPS_PROXY", "http://p:8080")
+    monkeypatch.setenv("NO_PROXY", "localhost")
+    monkeypatch.setenv("REQUESTS_CA_BUNDLE", "/etc/ca.pem")
+
+    env = utf8_subprocess_env()
+
+    assert env["HTTP_PROXY"] == "http://p:8080"
+    assert env["HTTPS_PROXY"] == "http://p:8080"
+    assert env["NO_PROXY"] == "localhost"
+    assert env["REQUESTS_CA_BUNDLE"] == "/etc/ca.pem"
+
+
 def test_mcporter_utf8_env_args():
     assert mcporter_utf8_env_args() == [
         "--env",

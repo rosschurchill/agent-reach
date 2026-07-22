@@ -43,25 +43,45 @@ class Config:
 
         A torn or hand-corrupted config must never brick the CLI: Config() is
         constructed on every command, so an unguarded YAMLError here would take
-        down the whole tool. On a parse/read error we quarantine the bad file
-        and start from an empty config instead of raising.
+        down the whole tool.
+
+        Only a *parse* error (YAMLError) means the file is genuinely bad — then
+        we quarantine it (timestamped, never clobbering an existing backup) and
+        start empty. A *transient* OSError (EACCES/EIO, an AV lock, a busy file)
+        must NOT quarantine a valid credentials file — we warn and continue with
+        empty data, leaving the file untouched so the next read recovers it
+        (CR-005: a rename+empty-save cycle would otherwise lose all cookies/keys).
         """
+        import sys
+
         if not self.config_path.exists():
             self.data = {}
             return
         try:
             with open(self.config_path, "r", encoding="utf-8") as f:
                 self.data = yaml.safe_load(f) or {}
-        except (yaml.YAMLError, OSError) as e:
-            import sys
-            corrupt = self.config_path.with_suffix(self.config_path.suffix + ".corrupt")
+        except yaml.YAMLError as e:
+            # Genuinely unparseable → quarantine with a unique suffix, start empty.
+            stamp = str(os.getpid())
+            corrupt = self.config_path.with_suffix(
+                self.config_path.suffix + f".corrupt.{stamp}"
+            )
             try:
                 os.replace(self.config_path, corrupt)
                 where = f"（已备份到 {corrupt}）"
             except OSError:
                 where = ""
             print(
-                f"[!] 配置文件无法解析，已忽略并从空配置开始{where}：{e}",
+                f"[!] 配置文件无法解析，已忽略并从空配置开始{where} / "
+                f"config unparseable, quarantined and starting empty: {e}",
+                file=sys.stderr,
+            )
+            self.data = {}
+        except OSError as e:
+            # Transient I/O — do NOT touch the file; just proceed with empty data.
+            print(
+                f"[!] 暂时无法读取配置（未改动文件）/ config temporarily unreadable "
+                f"(file left intact): {e}",
                 file=sys.stderr,
             )
             self.data = {}
@@ -85,6 +105,11 @@ class Config:
             os.chmod(tmp, stat.S_IRUSR | stat.S_IWUSR)  # 0o600
             with os.fdopen(fd, "w", encoding="utf-8") as f:
                 yaml.dump(self.data, f, default_flow_style=False, allow_unicode=True)
+                # Durability: flush + fsync before the atomic replace so a power
+                # loss can't leave an empty/torn target that the next load would
+                # then (correctly) treat as needing recovery (CR-006).
+                f.flush()
+                os.fsync(f.fileno())
             os.replace(tmp, str(self.config_path))
         except BaseException:
             try:

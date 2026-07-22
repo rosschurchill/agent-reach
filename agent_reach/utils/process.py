@@ -19,6 +19,16 @@ _ENV_ALLOWLIST = (
     "TERM", "TMPDIR", "TEMP", "TMP",
     # Windows equivalents.
     "SystemRoot", "ComSpec", "PATHEXT", "APPDATA", "LOCALAPPDATA", "USERPROFILE",
+    # Network reachability — the product's own design tells agents to export
+    # HTTP(S)_PROXY on restricted networks (cli.py --proxy). Dropping these made
+    # doctor probes run proxyless and report false timeouts (CR-004).
+    "HTTP_PROXY", "HTTPS_PROXY", "NO_PROXY", "ALL_PROXY",
+    "http_proxy", "https_proxy", "no_proxy", "all_proxy",
+    # TLS trust roots — a custom CA bundle must reach the child or HTTPS probes
+    # fail with cert errors that read as auth failures.
+    "SSL_CERT_FILE", "SSL_CERT_DIR", "REQUESTS_CA_BUNDLE", "NODE_EXTRA_CA_CERTS",
+    # XDG dirs — some CLIs read their config/creds from here.
+    "XDG_CONFIG_HOME", "XDG_DATA_HOME",
     # Agent Reach's own toggle.
     "AGENT_REACH_LANG",
     # Credentials the probed CLIs themselves read from the environment.

@@ -52,14 +52,38 @@ class TestConfig:
 
     def test_corrupt_yaml_does_not_brick_cli(self, tmp_path, capsys):
         """FX-201: a torn/corrupt config must load to {} (never raise), and the
-        bad file is quarantined so the next save starts clean."""
+        bad file is quarantined (timestamped) so the next save starts clean."""
         config_file = tmp_path / "config.yaml"
         config_file.write_text("key: [unterminated\n:::not yaml", encoding="utf-8")
 
         config = Config(config_path=config_file)  # must not raise
 
         assert config.data == {}
-        assert config_file.with_suffix(".yaml.corrupt").exists()
+        # Original quarantined; a uniquely-suffixed .corrupt.* backup exists.
+        assert not config_file.exists()
+        assert list(tmp_path.glob("config.yaml.corrupt.*"))
+
+    def test_transient_oserror_leaves_config_intact(self, tmp_path, monkeypatch):
+        """CR-005: a transient OSError on read must NOT quarantine a valid config
+        (a rename + empty-save cycle would permanently lose all credentials)."""
+        config_file = tmp_path / "config.yaml"
+        config_file.write_text("groq_api_key: gsk_secret\n", encoding="utf-8")
+
+        real_open = open
+
+        def flaky_open(path, *a, **k):
+            if str(path) == str(config_file):
+                raise OSError("temporarily unavailable (AV lock)")
+            return real_open(path, *a, **k)
+
+        monkeypatch.setattr("builtins.open", flaky_open)
+        config = Config(config_path=config_file)  # must not raise
+
+        assert config.data == {}
+        # File left untouched — no quarantine, original still present & readable.
+        assert config_file.exists()
+        assert not list(tmp_path.glob("config.yaml.corrupt*"))
+        assert config_file.read_text(encoding="utf-8") == "groq_api_key: gsk_secret\n"
 
     def test_save_is_atomic_preserves_perms(self, tmp_config):
         """FX-201: save writes 0o600 and leaves no stray temp files."""
