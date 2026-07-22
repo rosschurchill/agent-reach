@@ -11,6 +11,28 @@ import agent_reach.cli as cli
 from agent_reach.cli import main
 
 
+class TestOpenCLIInstall:
+    def test_reprobe_after_install_is_fresh(self, capsys):
+        """REG-1: the post-install re-probe must reset the memo, or a fast install
+        reports the pre-install 'not installed' cached state as a failure."""
+        from agent_reach.backends import OpenCLIStatus
+
+        not_installed = OpenCLIStatus(installed=False)
+        installed = OpenCLIStatus(installed=True, version="1.8.3", extension_installed=True)
+        probes = iter([not_installed, installed])
+
+        with patch("agent_reach.backends.opencli_status", side_effect=lambda *a, **k: next(probes)), \
+             patch("agent_reach.backends.reset_opencli_status_cache") as reset, \
+             patch("shutil.which", return_value="/usr/bin/npm"), \
+             patch("subprocess.run"):
+            cli._install_opencli_deps()
+
+        out = capsys.readouterr().out
+        assert "OpenCLI installed" in out
+        assert "install failed" not in out
+        reset.assert_called()  # memo cleared before the post-install probe
+
+
 class TestCLI:
     def test_version(self, capsys):
         with pytest.raises(SystemExit) as exc_info:

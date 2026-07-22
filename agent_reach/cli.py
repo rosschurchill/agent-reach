@@ -946,6 +946,7 @@ def _install_opencli_deps():
         OPENCLI_PACKAGE,
         opencli_status,
         opencli_summary,
+        reset_opencli_status_cache,
     )
 
     print("Setting up OpenCLI (browser-session backend, desktop only)...")
@@ -969,6 +970,9 @@ def _install_opencli_deps():
     except Exception:
         pass
 
+    # The pre-install probe cached "not installed" for the memo's TTL — clear it
+    # so this post-install re-probe reflects reality, not the stale result (REG-1).
+    reset_opencli_status_cache()
     st = opencli_status()
     if st.installed and not st.broken:
         print("  ✅ OpenCLI installed")
