@@ -1,92 +1,96 @@
 #!/bin/bash
-# Agent Reach 一键完整测试
-# 用法: bash test-agent-reach.sh
-# 在任何有 Python 3.10+ 的机器上跑就行
-
+# Agent Reach — end-to-end integration test (router model).
+#
+# Installs THIS checkout into a clean venv, runs install(safe) + doctor, then
+# exercises the REAL upstream read commands the SKILL prescribes for the
+# zero-config channels (agent-reach is a router/installer, not a wrapper — there
+# is no `agent-reach read`; the agent calls the upstream tool directly).
+#
+# Login channels (Twitter / Reddit / XiaoHongShu / Xueqiu / LinkedIn) need a
+# browser-cookie export and are intentionally skipped here — see docs/install.md.
+#
+# Usage: bash test.sh
 set -e
 
-echo "╔════════════════════════════════════════════╗"
-echo "║    👁️  Agent Reach 完整测试                ║"
-echo "╚════════════════════════════════════════════╝"
-echo ""
+REPO="$(cd "$(dirname "$0")" && pwd)"
 
-# ── 1. 准备干净环境 ──
-echo "📦 创建测试环境..."
+echo "╔════════════════════════════════════════════╗"
+echo "║   👁️  Agent Reach — integration test        ║"
+echo "╚════════════════════════════════════════════╝"
+
+echo "📦 clean venv..."
 TEST_DIR=$(mktemp -d)
 python3 -m venv "$TEST_DIR/venv"
+# shellcheck disable=SC1091
 source "$TEST_DIR/venv/bin/activate"
 
-# ── 2. 安装 ──
-echo "📥 从 GitHub 安装..."
-pip install -q https://github.com/Panniantong/agent-reach/archive/main.zip 2>&1 | tail -1
-echo ""
+echo "📥 install the hardened build from $REPO ..."
+pip install -q "$REPO"
 
-# ── 3. 自动配置 ──
-echo "⚙️  运行 install..."
-agent-reach install --env=auto 2>&1
-echo ""
+echo "⚙️  agent-reach install (safe mode — no system changes)..."
+agent-reach install --env=auto --safe 2>&1 | tail -4 || true
 
-# ── 4. 诊断 ──
-echo "🩺 运行 doctor..."
-agent-reach doctor 2>&1
-echo ""
-
-# ── 5. 逐个测试 ──
-PASS=0
-FAIL=0
-SKIP=0
-
-test_it() {
-    local name="$1"
-    shift
-    echo -n "  $name ... "
-    output=$(eval "$@" 2>&1) || true
-    if echo "$output" | grep -q "📖\|🔗\|http"; then
-        echo "✅"
-        PASS=$((PASS+1))
-    elif echo "$output" | grep -q "⚠️\|not installed\|not configured"; then
-        echo "⏭️  (跳过 — 缺依赖)"
-        SKIP=$((SKIP+1))
-    else
-        echo "❌"
-        echo "    $(echo "$output" | head -2)"
-        FAIL=$((FAIL+1))
-    fi
-}
-
-echo "📖 阅读测试"
-test_it "网页" "agent-reach read 'https://example.com'"
-test_it "GitHub" "agent-reach read 'https://github.com/Panniantong/agent-reach'"
-test_it "YouTube" "agent-reach read 'https://www.youtube.com/watch?v=dQw4w9WgXcQ'"
-test_it "B站" "agent-reach read 'https://www.bilibili.com/video/BV1d4411N7zD'"
-test_it "RSS" "agent-reach read 'https://hnrss.org/frontpage'"
-test_it "Twitter" "agent-reach read 'https://x.com/elonmusk/status/1893797839927353448'"
-test_it "Reddit" "agent-reach read 'https://www.reddit.com/r/LocalLLaMA/hot'"
+echo "🩺 agent-reach doctor..."
+agent-reach doctor 2>&1 | tail -18
 
 echo ""
-echo "🔍 搜索测试"
-test_it "全网搜索" "agent-reach search 'best AI agent framework' -n 2"
-test_it "GitHub搜索" "agent-reach search-github 'yt-dlp' -n 2"
-test_it "Twitter搜索" "agent-reach search-twitter 'AI agent' -n 2"
-test_it "Reddit搜索" "agent-reach search-reddit 'machine learning' -n 2"
-test_it "YouTube搜索" "agent-reach search-youtube 'AI tutorial' -n 2"
-test_it "B站搜索" "agent-reach search-bilibili 'AI' -n 2"
-test_it "小红书搜索" "agent-reach search-xhs 'AI' -n 2"
+echo "📖 zero-config read smoke (real upstream commands)"
+PASS=0; FAIL=0; SKIP=0
+ok()   { echo "  ✅ $1"; PASS=$((PASS+1)); }
+skip() { echo "  ⏭️  $1 ($2)"; SKIP=$((SKIP+1)); }
+fail() { echo "  ❌ $1 — $2"; FAIL=$((FAIL+1)); }
+
+# Web — Jina Reader
+out=$(curl -s --max-time 25 "https://r.jina.ai/https://example.com" || true)
+echo "$out" | grep -qi "Test Document" && ok "Web (Jina Reader)" || fail "Web" "$(echo "$out" | head -1)"
+
+# GitHub — gh CLI
+if command -v gh >/dev/null 2>&1; then
+    gh repo view cli/cli >/dev/null 2>&1 && ok "GitHub (gh)" || skip "GitHub" "gh not authenticated"
+else
+    skip "GitHub" "gh not installed"
+fi
+
+# RSS — feedparser (a package dependency)
+python -c "import feedparser,sys; d=feedparser.parse('https://hnrss.org/frontpage'); sys.exit(0 if d.entries else 1)" \
+    && ok "RSS (feedparser)" || fail "RSS" "no entries"
+
+# V2EX — public JSON API
+curl -s --max-time 20 "https://www.v2ex.com/api/topics/hot.json" | grep -q '"title"' \
+    && ok "V2EX (public API)" || fail "V2EX" "no topics"
+
+# YouTube — yt-dlp (a package dependency)
+if command -v yt-dlp >/dev/null 2>&1; then
+    yt-dlp --dump-json --no-warnings "https://www.youtube.com/watch?v=dQw4w9WgXcQ" 2>/dev/null | grep -q '"title"' \
+        && ok "YouTube (yt-dlp)" || fail "YouTube" "no metadata"
+else
+    skip "YouTube" "yt-dlp not installed"
+fi
+
+# Bilibili search — public API (WAF-gated; failure is a skip, not a hard fail)
+UA="Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36"
+curl -s --max-time 15 -c "$TEST_DIR/bili.txt" -o /dev/null -A "$UA" "https://www.bilibili.com/" || true
+if curl -s --max-time 15 -b "$TEST_DIR/bili.txt" -A "$UA" -e "https://www.bilibili.com/" \
+     "https://api.bilibili.com/x/web-interface/search/all/v2?keyword=AI&page=1" | grep -q '"code":0'; then
+    ok "Bilibili search (public API)"
+else
+    skip "Bilibili search" "WAF/rate-limited from this IP"
+fi
+
+echo "  ⏭️  Twitter · Reddit · XiaoHongShu · Xueqiu · LinkedIn — need browser cookies (docs/install.md)"
+SKIP=$((SKIP+5))
 
 echo ""
 echo "════════════════════════════════════════════"
-echo "  ✅ 通过: $PASS   ❌ 失败: $FAIL   ⏭️  跳过: $SKIP"
+echo "  ✅ passed: $PASS   ❌ failed: $FAIL   ⏭️  skipped: $SKIP"
 echo "════════════════════════════════════════════"
 
-# ── 6. 清理 ──
 deactivate 2>/dev/null || true
 rm -rf "$TEST_DIR"
 
-if [ $FAIL -eq 0 ]; then
-    echo ""
-    echo "🎉 全部通过！"
+if [ "$FAIL" -eq 0 ]; then
+    echo "🎉 zero-config channels verified end-to-end"
 else
-    echo ""
-    echo "⚠️  有 $FAIL 个测试失败，请检查上面的输出"
+    echo "⚠️  $FAIL check(s) failed — see output above"
     exit 1
 fi
